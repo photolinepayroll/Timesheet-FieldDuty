@@ -434,13 +434,55 @@ function handleGetPeriodSheet(payload) {
   var attRecords = handleGetAttendance(payload);
   var dayMap     = {}; // date string → { ins, outs, destination, in_record, out_record }
 
-  attRecords.forEach(function(r) {
-    var date = r.timestamp.slice(0, 10);
-    if (!dayMap[date]) dayMap[date] = { ins:[], outs:[], destination: r.destination };
-    // Real attendance app writes type as 'Log In' / 'Log Out', not 'IN'/'OUT'.
-    if (r.type === 'Log In')  dayMap[date].ins.push(r);
-    if (r.type === 'Log Out') dayMap[date].outs.push(r);
+  function dayKey(ts) { return ts.slice(0, 10); }
+  function ensureDay(date, destination) {
+    if (!dayMap[date]) dayMap[date] = { ins: [], outs: [], destination: destination };
+    return dayMap[date];
+  }
+
+  // Sort chronologically before pairing — handleGetAttendance doesn't
+  // guarantee CSV row order is chronological. Timestamps are all
+  // "YYYY-MM-DD HH:MM:SS" (fixed-width, zero-padded), so plain string
+  // comparison sorts them correctly without any Date-parsing/timezone risk.
+  attRecords.sort(function(a, b) {
+    return a.timestamp < b.timestamp ? -1 : (a.timestamp > b.timestamp ? 1 : 0);
   });
+
+  // Pair each 'Log In' with the NEXT 'Log Out' that follows it chronologically,
+  // regardless of whether they fall on the same calendar date. A shift that
+  // starts before midnight and ends after it (e.g. clock in 10PM, clock out
+  // 3AM the next day) is attributed entirely to the date it STARTED on — not
+  // split into two days that each look like a no-show. A naive
+  // "bucket every record by its own date" approach (the previous
+  // implementation) would put the Log In in one day's bucket and the Log Out
+  // in the next day's bucket, leaving both days looking like 0 hours worked.
+  //
+  // Real attendance data is messy (duplicate Log Ins a few seconds apart,
+  // orphan Log Outs with no preceding Log In, an open Log In with no Log Out
+  // yet for an in-progress day) — this handles all of those:
+  // - A second 'Log In' while one is already open closes the first one out
+  //   as an incomplete (no Log Out) entry on its own date, then opens the new one.
+  // - A 'Log Out' with no open 'Log In' is an orphan, attributed to its own
+  //   date as a no-Log-In entry.
+  // - A 'Log In' left open at the end of the period (still clocked in) is
+  //   recorded as an incomplete entry on its own date.
+  var openIn = null;
+  attRecords.forEach(function(r) {
+    if (r.type === 'Log In') {
+      if (openIn) ensureDay(dayKey(openIn.timestamp), openIn.destination).ins.push(openIn);
+      openIn = r;
+    } else if (r.type === 'Log Out') {
+      if (openIn) {
+        var d = ensureDay(dayKey(openIn.timestamp), openIn.destination);
+        d.ins.push(openIn);
+        d.outs.push(r);
+        openIn = null;
+      } else {
+        ensureDay(dayKey(r.timestamp), r.destination).outs.push(r);
+      }
+    }
+  });
+  if (openIn) ensureDay(dayKey(openIn.timestamp), openIn.destination).ins.push(openIn);
 
   // Get employee profile
   var users = sheetToObjects('Users');
