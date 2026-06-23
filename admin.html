@@ -383,10 +383,14 @@
     function approveReject(claimId, action) {
       var user = currentUser();
       var notes = action === 'reject' ? prompt('Reason for rejection:') : '';
+      // NOTE: sent as "decision", not "action" — api() merges this object's
+      // keys on top of {action: 'approveClaim'} (the dispatch key), so a
+      // same-named "action" key here would silently overwrite the dispatch
+      // value before doPost ever sees it, breaking the request entirely.
       api('approveClaim', {
         claim_id: claimId,
         approver_name: user.name,
-        action: action,
+        decision: action,
         notes: notes || ''
       }, function(err) {
         if (err) { alert(err.message); return; }

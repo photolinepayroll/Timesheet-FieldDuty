@@ -401,7 +401,13 @@ function handleGetClaims(payload) {
 }
 
 function handleApproveClaim(payload) {
-  // payload: { claim_id, approver_name, action: 'approve'|'reject', notes }
+  // payload: { claim_id, approver_name, decision: 'approve'|'reject', notes }
+  // NOTE: this must NOT be named "action" — doPost's own dispatch key is
+  // also called "action", and api()'s Object.assign({action: dispatchAction},
+  // params) lets params override the dispatch key, so a same-named "action"
+  // field here would silently replace "approveClaim" with "approve"/"reject"
+  // before doPost ever sees it, breaking the dispatch entirely (this is
+  // exactly the bug that existed here before this fix).
   var sh = getSheet('Claims');
   var rows = sh.getDataRange().getValues();
   var headers = rows[0];
@@ -414,7 +420,7 @@ function handleApproveClaim(payload) {
   for (var i = 1; i < rows.length; i++) {
     if (rows[i][idIdx] === payload.claim_id) {
       sh.getRange(i+1, statusIdx+1).setValue(
-        payload.action === 'approve' ? 'Approved' : 'Rejected'
+        payload.decision === 'approve' ? 'Approved' : 'Rejected'
       );
       sh.getRange(i+1, approverIdx+1).setValue(payload.approver_name);
       sh.getRange(i+1, approvedAtIdx+1).setValue(new Date().toISOString());
