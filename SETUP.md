@@ -27,7 +27,44 @@ Notes:
 
 Leave the rest of the rows empty for now (users will be added later).
 
-### Tab: `MealRates`
+### Tab: `EmployeeRates`
+
+Row 1 headers:
+```
+employee_name | department | area | meal_amount | accom_amount
+```
+Row semantics:
+- **Employee-specific row**: `employee_name` filled (exact match to
+  `Users.name`), `department` blank. Checked first.
+- **Department-fallback row**: `employee_name` blank, `department` filled
+  (exact match to `Users.department`). Used only when no employee-specific
+  row matches for that area.
+- A row must have exactly one of the two non-blank — never both, never
+  neither.
+- `area` uses the same free-text substring-match convention as
+  `MealRates`/`AccomRates` did (e.g. `"NCR Area"`, `"Dagupan Area"`).
+- `meal_amount`/`accom_amount` are plain numbers, either can be `0`.
+
+Leave the rest of the rows empty for now (rates will be added later).
+
+### Tab: `RawRateImport` (scratch tab)
+
+Same header row as `EmployeeRates`:
+```
+employee_name | department | area | meal_amount | accom_amount
+```
+This is a temporary staging tab — paste resolved real rate data here before
+a one-time import script copies it into `EmployeeRates`. It is not read by
+the app directly.
+
+> **Deprecated tabs below:** `MealRates` and `AccomRates` are **deprecated
+> — superseded by `EmployeeRates`, kept only until cutover is verified (see
+> Task 4 of the per-employee-rate-redesign implementation plan)**. Do not
+> remove them yet; they remain as a rollback safety net. They will be
+> deleted manually once the new `EmployeeRates`-based flow is confirmed
+> working in production.
+
+### Tab: `MealRates` (deprecated)
 
 Row 1 headers:
 ```
@@ -35,7 +72,7 @@ area | level_1 | level_2 | level_3
 ```
 Leave the rest of the rows empty for now (rates will be added later).
 
-### Tab: `AccomRates`
+### Tab: `AccomRates` (deprecated)
 
 Row 1 headers:
 ```
