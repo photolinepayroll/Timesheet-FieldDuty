@@ -81,8 +81,23 @@
       <div id="rates-tables"></div>
     </div>
 
+    <!-- Tab: Approve Claims -->
+    <div id="tab-claims" class="tab-panel" style="display:none;">
+      <div class="section-title">Pending Claims — Approval Queue</div>
+      <div class="table-scroll">
+        <table id="claims-table">
+          <thead><tr>
+            <th>Employee</th><th>Date</th><th>Type</th>
+            <th>From</th><th>To</th><th>Mode</th>
+            <th>Computed</th><th>Claimed</th>
+            <th>GPS</th><th>Status</th><th>Notes</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="claims-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Other tabs: placeholders until later tasks -->
-    <div id="tab-claims"  class="tab-panel" style="display:none;">Approval queue (Task 9)</div>
     <div id="tab-periods" class="tab-panel" style="display:none;">Period sheets (Task 10)</div>
   </div>
 
@@ -104,6 +119,7 @@
           btn.classList.add('active');
           document.getElementById('tab-' + btn.dataset.tab).style.display = 'block';
           if (btn.dataset.tab === 'rates') loadRates();
+          if (btn.dataset.tab === 'claims') loadClaims();
         });
       });
     }
@@ -296,6 +312,53 @@
           msg.textContent = 'Saved!';
           setTimeout(function() { msg.textContent = ''; }, 2000);
         }
+      });
+    }
+
+    // ---- Approve Claims ----
+    function loadClaims() {
+      api('getClaims', { status: 'Submitted' }, function(err, claims) {
+        if (err) { alert(err.message); return; }
+        var tbody = document.getElementById('claims-tbody');
+        tbody.innerHTML = '';
+        if (!claims.length) {
+          tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;">No pending claims.</td></tr>';
+          return;
+        }
+        claims.forEach(function(c) {
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td>' + escapeHtml(c.employee_name) + '</td>' +
+            '<td>' + escapeHtml(c.date) + '</td>' +
+            '<td>' + escapeHtml(c.type) + '</td>' +
+            '<td>' + escapeHtml(c.from_loc) + '</td>' +
+            '<td>' + escapeHtml(c.to_loc) + '</td>' +
+            '<td>' + escapeHtml(c.vehicle_mode) + '</td>' +
+            '<td>' + formatCurrency(c.computed_amount) + '</td>' +
+            '<td>' + formatCurrency(c.claimed_amount) + '</td>' +
+            '<td><span class="badge-' + (c.gps_check==='ok'?'auto':'flagged') + '">' + escapeHtml(c.gps_check) + '</span></td>' +
+            '<td><span class="badge-pending">' + escapeHtml(c.status) + '</span></td>' +
+            '<td>' + escapeHtml(c.notes) + '</td>' +
+            '<td style="white-space:nowrap;">' +
+              '<button onclick="approveReject(\'' + c.id + '\',\'approve\')" style="background:#27ae60;color:#fff;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;margin-right:4px;">✓ Approve</button>' +
+              '<button onclick="approveReject(\'' + c.id + '\',\'reject\')" style="background:#e74c3c;color:#fff;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;">✗ Reject</button>' +
+            '</td>';
+          tbody.appendChild(tr);
+        });
+      });
+    }
+
+    function approveReject(claimId, action) {
+      var user = currentUser();
+      var notes = action === 'reject' ? prompt('Reason for rejection:') : '';
+      api('approveClaim', {
+        claim_id: claimId,
+        approver_name: user.name,
+        action: action,
+        notes: notes || ''
+      }, function(err) {
+        if (err) { alert(err.message); return; }
+        loadClaims(); // refresh
       });
     }
   </script>

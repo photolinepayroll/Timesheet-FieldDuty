@@ -56,6 +56,19 @@ function formatDate(d) {
   return dt.toLocaleDateString('en-PH');
 }
 
+// Escapes HTML special characters so untrusted/free-text strings (e.g.
+// employee-authored claim notes) can be safely concatenated into innerHTML
+// without being interpreted as markup or executable script.
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ---- Attendance ----
 // Groups raw attendance records into day-summaries per employee
 function groupAttendanceByDay(records) {

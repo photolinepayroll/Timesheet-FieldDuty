@@ -36,8 +36,7 @@ function doPost(e) {
     var payload = JSON.parse(e.postData.contents);
     var action = payload.action;
     // NOTE: later tasks will add their own entries to this map
-    // (e.g. 'getClaims', 'approveClaim', 'getPeriodSheet')
-    // as their handler functions are implemented.
+    // (e.g. 'getPeriodSheet') as their handler functions are implemented.
     var handlers = {
       'ping': handlePing,
       'login': handleLogin,
@@ -47,7 +46,9 @@ function doPost(e) {
       'saveRates': handleSaveRates,
       'getAttendance': handleGetAttendance,
       'saveClaim': handleSaveClaim,
-      'getConfig': handleGetConfig
+      'getConfig': handleGetConfig,
+      'getClaims': handleGetClaims,
+      'approveClaim': handleApproveClaim
     };
     if (!handlers[action]) throw new Error('Unknown action: ' + action);
     var result = handlers[action](payload);
@@ -368,4 +369,43 @@ function handleSaveClaim(payload) {
 
 function handleGetConfig(payload) {
   return sheetToObjects('Config');
+}
+
+// ============================================================
+// CLAIMS APPROVAL QUEUE (admin/head side)
+// ============================================================
+
+function handleGetClaims(payload) {
+  // payload: { status (optional), employee_name (optional) }
+  var claims = sheetToObjects('Claims');
+  return claims.filter(function(c) {
+    if (payload.status && c['status'] !== payload.status) return false;
+    if (payload.employee_name && c['employee_name'] !== payload.employee_name) return false;
+    return true;
+  });
+}
+
+function handleApproveClaim(payload) {
+  // payload: { claim_id, approver_name, action: 'approve'|'reject', notes }
+  var sh = getSheet('Claims');
+  var rows = sh.getDataRange().getValues();
+  var headers = rows[0];
+  var idIdx     = headers.indexOf('id');
+  var statusIdx = headers.indexOf('status');
+  var approverIdx  = headers.indexOf('approver_name');
+  var approvedAtIdx = headers.indexOf('approved_at');
+  var notesIdx  = headers.indexOf('notes');
+
+  for (var i = 1; i < rows.length; i++) {
+    if (rows[i][idIdx] === payload.claim_id) {
+      sh.getRange(i+1, statusIdx+1).setValue(
+        payload.action === 'approve' ? 'Approved' : 'Rejected'
+      );
+      sh.getRange(i+1, approverIdx+1).setValue(payload.approver_name);
+      sh.getRange(i+1, approvedAtIdx+1).setValue(new Date().toISOString());
+      if (payload.notes) sh.getRange(i+1, notesIdx+1).setValue(payload.notes);
+      return 'done';
+    }
+  }
+  throw new Error('Claim not found: ' + payload.claim_id);
 }
