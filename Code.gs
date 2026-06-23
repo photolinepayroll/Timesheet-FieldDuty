@@ -36,14 +36,16 @@ function doPost(e) {
     var payload = JSON.parse(e.postData.contents);
     var action = payload.action;
     // NOTE: later tasks will add their own entries to this map
-    // (e.g. 'getConfig', 'getRates', 'saveRates', 'getClaims',
-    // 'saveClaim', 'approveClaim', 'getPeriodSheet', 'getAttendance')
+    // (e.g. 'getConfig', 'getClaims', 'saveClaim', 'approveClaim',
+    // 'getPeriodSheet', 'getAttendance')
     // as their handler functions are implemented.
     var handlers = {
       'ping': handlePing,
       'login': handleLogin,
       'getUsers': handleGetUsers,
-      'saveUser': handleSaveUser
+      'saveUser': handleSaveUser,
+      'getRates': handleGetRates,
+      'saveRates': handleSaveRates
     };
     if (!handlers[action]) throw new Error('Unknown action: ' + action);
     var result = handlers[action](payload);
@@ -108,4 +110,30 @@ function handleSaveUser(payload) {
     sh.appendRow(rowFromUser(payload.user));
   }
   return payload.user.id;
+}
+
+function handleGetRates(payload) {
+  return {
+    meal:      sheetToObjects('MealRates'),
+    accom:     sheetToObjects('AccomRates'),
+    midnight:  sheetToObjects('MidnightRates'),
+    ltfrb:     sheetToObjects('LTFRBRates'),
+    config:    sheetToObjects('Config')
+  };
+}
+
+function handleSaveRates(payload) {
+  // payload.sheet = 'MealRates'|'AccomRates'|'MidnightRates'|'LTFRBRates'
+  // payload.rows = array of objects matching sheet headers
+  var sh = getSheet(payload.sheet);
+  var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  // clear data rows (keep header)
+  if (sh.getLastRow() > 1) {
+    sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).clearContent();
+  }
+  payload.rows.forEach(function(row, i) {
+    var rowData = headers.map(function(h) { return row[h] !== undefined ? row[h] : ''; });
+    sh.getRange(i + 2, 1, 1, headers.length).setValues([rowData]);
+  });
+  return 'saved';
 }

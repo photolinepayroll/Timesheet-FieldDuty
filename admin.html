@@ -76,8 +76,12 @@
       </div>
     </div>
 
+    <!-- Tab: Rate Tables -->
+    <div id="tab-rates" class="tab-panel" style="display:none;">
+      <div id="rates-tables"></div>
+    </div>
+
     <!-- Other tabs: placeholders until later tasks -->
-    <div id="tab-rates"   class="tab-panel" style="display:none;">Rate tables (Task 4)</div>
     <div id="tab-claims"  class="tab-panel" style="display:none;">Approval queue (Task 9)</div>
     <div id="tab-periods" class="tab-panel" style="display:none;">Period sheets (Task 10)</div>
   </div>
@@ -99,6 +103,7 @@
           document.querySelectorAll('.tab-panel').forEach(function(p) { p.style.display='none'; });
           btn.classList.add('active');
           document.getElementById('tab-' + btn.dataset.tab).style.display = 'block';
+          if (btn.dataset.tab === 'rates') loadRates();
         });
       });
     }
@@ -156,6 +161,141 @@
         if (err) { alert(err.message); return; }
         document.getElementById('uf-msg').textContent = 'Saved!';
         loadUsers();
+      });
+    }
+
+    // ---- Rate Tables ----
+    // Config describing each of the 4 editable rate tables: which sheet it
+    // maps to, and its columns in header order (key = sheet header name).
+    var RATE_TABLES = [
+      { sheet: 'MealRates',     title: 'Meal Rates',     columns: [
+        { key: 'area',     label: 'Area' },
+        { key: 'level_1',  label: 'Level 1' },
+        { key: 'level_2',  label: 'Level 2' },
+        { key: 'level_3',  label: 'Level 3' }
+      ]},
+      { sheet: 'AccomRates',    title: 'Accommodation Rates', columns: [
+        { key: 'area',     label: 'Area' },
+        { key: 'level_1',  label: 'Level 1' },
+        { key: 'level_2',  label: 'Level 2' },
+        { key: 'level_3',  label: 'Level 3' }
+      ]},
+      { sheet: 'MidnightRates', title: 'Midnight Rates', columns: [
+        { key: 'label',     label: 'Label' },
+        { key: 'from_hour', label: 'From Hour' },
+        { key: 'from_min',  label: 'From Min' },
+        { key: 'to_hour',   label: 'To Hour' },
+        { key: 'to_min',    label: 'To Min' },
+        { key: 'amount',    label: 'Amount' }
+      ]},
+      { sheet: 'LTFRBRates',    title: 'LTFRB Rates', columns: [
+        { key: 'vehicle_type', label: 'Vehicle Type' },
+        { key: 'base_fare',    label: 'Base Fare' },
+        { key: 'base_km',      label: 'Base KM' },
+        { key: 'per_km',       label: 'Per KM' }
+      ]}
+    ];
+
+    // map of sheet -> rates key returned by handleGetRates
+    var RATE_DATA_KEY = {
+      MealRates: 'meal',
+      AccomRates: 'accom',
+      MidnightRates: 'midnight',
+      LTFRBRates: 'ltfrb'
+    };
+
+    function loadRates() {
+      api('getRates', {}, function(err, data) {
+        if (err) { alert(err.message); return; }
+        var wrap = document.getElementById('rates-tables');
+        wrap.innerHTML = '';
+        RATE_TABLES.forEach(function(cfg) {
+          wrap.appendChild(buildRateTableBlock(cfg, data[RATE_DATA_KEY[cfg.sheet]] || []));
+        });
+      });
+    }
+
+    function buildRateTableBlock(cfg, rows) {
+      var block = document.createElement('div');
+      block.style.marginBottom = '28px';
+
+      var title = document.createElement('div');
+      title.className = 'section-title';
+      title.textContent = cfg.title;
+      block.appendChild(title);
+
+      var scroll = document.createElement('div');
+      scroll.className = 'table-scroll';
+
+      var table = document.createElement('table');
+      table.id = 'rates-table-' + cfg.sheet;
+
+      var thead = document.createElement('thead');
+      var headRow = '<tr>' + cfg.columns.map(function(c) {
+        return '<th>' + c.label + '</th>';
+      }).join('') + '<th>Actions</th></tr>';
+      thead.innerHTML = headRow;
+      table.appendChild(thead);
+
+      var tbody = document.createElement('tbody');
+      tbody.id = 'rates-tbody-' + cfg.sheet;
+      table.appendChild(tbody);
+      scroll.appendChild(table);
+      block.appendChild(scroll);
+
+      rows.forEach(function(row) { tbody.appendChild(buildRateRow(cfg, row)); });
+
+      var btnRow = document.createElement('div');
+      btnRow.style.marginTop = '8px';
+      btnRow.style.display = 'flex';
+      btnRow.style.gap = '8px';
+
+      var addBtn = document.createElement('button');
+      addBtn.textContent = '+ Add row';
+      addBtn.onclick = function() { tbody.appendChild(buildRateRow(cfg, {})); };
+
+      var saveBtn = document.createElement('button');
+      saveBtn.textContent = 'Save';
+      saveBtn.onclick = function() { saveRateTable(cfg); };
+
+      var msg = document.createElement('span');
+      msg.id = 'rates-msg-' + cfg.sheet;
+      msg.style.color = 'green';
+      msg.style.alignSelf = 'center';
+
+      btnRow.appendChild(addBtn);
+      btnRow.appendChild(saveBtn);
+      btnRow.appendChild(msg);
+      block.appendChild(btnRow);
+
+      return block;
+    }
+
+    function buildRateRow(cfg, row) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = cfg.columns.map(function(c) {
+        var val = row[c.key] !== undefined && row[c.key] !== null ? row[c.key] : '';
+        return '<td><input type="text" data-key="' + c.key + '" value="' + String(val).replace(/"/g, '&quot;') + '" style="width:100%;box-sizing:border-box;"></td>';
+      }).join('') + '<td><button onclick="this.closest(\'tr\').remove()">Delete</button></td>';
+      return tr;
+    }
+
+    function saveRateTable(cfg) {
+      var tbody = document.getElementById('rates-tbody-' + cfg.sheet);
+      var rows = [].slice.call(tbody.querySelectorAll('tr')).map(function(tr) {
+        var row = {};
+        tr.querySelectorAll('input[data-key]').forEach(function(input) {
+          row[input.dataset.key] = input.value;
+        });
+        return row;
+      });
+      api('saveRates', { sheet: cfg.sheet, rows: rows }, function(err) {
+        var msg = document.getElementById('rates-msg-' + cfg.sheet);
+        if (err) { alert(err.message); return; }
+        if (msg) {
+          msg.textContent = 'Saved!';
+          setTimeout(function() { msg.textContent = ''; }, 2000);
+        }
       });
     }
   </script>
