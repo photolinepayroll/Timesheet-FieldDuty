@@ -117,6 +117,7 @@
           Generate
         </button>
         <button onclick="printPeriodSheet()" style="padding:8px 18px;">🖨 Print</button>
+        <button onclick="exportPeriodCSV(window._lastPeriodSheet)" style="padding:8px 18px;">⬇ Export CSV</button>
       </div>
 
       <div id="period-sheet-output"></div>
@@ -420,6 +421,7 @@
       api('getPeriodSheet', { employee_name: emp, period_start: start, period_end: end },
         function(err, sheet) {
           if (err) { out.innerHTML = '<p style="color:red;">' + escapeHtml(err.message) + '</p>'; return; }
+          window._lastPeriodSheet = sheet;
           out.innerHTML = renderPeriodSheet(sheet);
         }
       );
@@ -438,6 +440,40 @@
       w.document.write('</body></html>');
       w.document.close();
       w.print();
+    }
+
+    // Quotes a single CSV field per standard CSV rules: if the value
+    // (stringified) contains a comma, double-quote, or newline, wrap it in
+    // double quotes and double any embedded double-quotes. Otherwise return
+    // the raw string unchanged. Applied uniformly to every field below —
+    // not just the known-risky free-text ones (e.g. branch) — since any
+    // field could in principle contain a comma/quote/newline.
+    function csvField(v) {
+      var s = (v === null || v === undefined) ? '' : String(v);
+      if (/[",\n]/.test(s)) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    }
+
+    function exportPeriodCSV(sheet) {
+      if (!sheet) { alert('Generate a period sheet first.'); return; }
+      var headers = ['Date','Branch','IN','OUT','Hours','OT','Offset','UT','OT Type',
+                     'Auto Fare','Special Fare','Total Fare','Meal','Accom','Midnight','Total'];
+      var rows = sheet.rows.map(function(r) {
+        return [r.date, r.branch, r.time_in, r.time_out, r.hours_worked,
+                r.ot_hours, r.offset_hours, r.ut_hours, r.ot_type,
+                r.auto_fare, r.special_fare, r.total_fare,
+                r.meal, r.accom, r.midnight, r.total_allowance];
+      });
+      var csv = [headers].concat(rows).map(function(r) {
+        return r.map(csvField).join(',');
+      }).join('\n');
+      var blob = new Blob([csv], { type: 'text/csv' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = sheet.employee.name + '_' + sheet.period_start + '.csv';
+      a.click();
     }
   </script>
 </body>
