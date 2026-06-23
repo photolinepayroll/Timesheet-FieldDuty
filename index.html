@@ -95,24 +95,30 @@
         notes:            document.getElementById('cl-notes').value.trim()
       };
 
-      // Receipt: convert to base64 if provided
+      // Receipt: convert to base64 if provided.
+      // KNOWN LIMITATION (accepted, not a bug): no size check or compression
+      // here. Google Sheets cells cap at ~50,000 characters; a typical phone
+      // photo as base64 can run 1-5MB (millions of characters) and would
+      // fail or get truncated silently. Revisit with client-side compression
+      // or Drive-upload if this becomes a real problem.
       var file = document.getElementById('cl-receipt').files[0];
       if (file) {
         var reader = new FileReader();
         reader.onload = function(e) {
           claim.receipt_url = e.target.result; // base64 data URL stored in sheet
-          api('saveClaim', { claim: claim }, function(err, id) {
-            if (err) { alert(err.message); return; }
-            document.getElementById('cl-msg').textContent = 'Claim submitted! ID: ' + id;
-          });
+          finishSubmitClaim(claim);
         };
         reader.readAsDataURL(file);
       } else {
-        api('saveClaim', { claim: claim }, function(err, id) {
-          if (err) { alert(err.message); return; }
-          document.getElementById('cl-msg').textContent = 'Claim submitted! ID: ' + id;
-        });
+        finishSubmitClaim(claim);
       }
+    }
+
+    function finishSubmitClaim(claim) {
+      api('saveClaim', { claim: claim }, function(err, id) {
+        if (err) { alert(err.message); return; }
+        document.getElementById('cl-msg').textContent = 'Claim submitted! ID: ' + id;
+      });
     }
 
     function getStoredConfig() {
