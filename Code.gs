@@ -170,8 +170,18 @@ function handleGetAttendance(payload) {
     address:     idx('Address')
   };
 
-  var start = payload.period_start ? new Date(payload.period_start) : null;
-  var end   = payload.period_end   ? new Date(payload.period_end)   : null;
+  // Compare plain 'YYYY-MM-DD' date strings rather than Date objects: the
+  // attendance timestamp ("YYYY-MM-DD HH:MM:SS") parses as local time while a
+  // date-only string ("YYYY-MM-DD") parses as UTC midnight, which would
+  // silently misfile records near period boundaries depending on the script's
+  // timezone setting. ISO-formatted date strings compare correctly with
+  // plain string operators, so this sidesteps Date-parsing ambiguity.
+  function dateKey(ts) {
+    return ts.indexOf('T') !== -1 ? ts.split('T')[0] : ts.split(' ')[0];
+  }
+
+  var startKey = payload.period_start ? dateKey(payload.period_start) : null;
+  var endKey   = payload.period_end   ? dateKey(payload.period_end)   : null;
 
   var records = rows.slice(1)
     .filter(function(row) { return row.length > COL.name && row[COL.name]; })
@@ -188,10 +198,10 @@ function handleGetAttendance(payload) {
     })
     .filter(function(r) {
       if (payload.employee_name && r.name !== payload.employee_name) return false;
-      if (start || end) {
-        var t = new Date(r.timestamp);
-        if (start && t < start) return false;
-        if (end   && t > end)   return false;
+      if (startKey || endKey) {
+        var tKey = dateKey(r.timestamp);
+        if (startKey && tKey < startKey) return false;
+        if (endKey   && tKey > endKey)   return false;
       }
       return true;
     });
