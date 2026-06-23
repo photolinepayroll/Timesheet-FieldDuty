@@ -36,8 +36,7 @@ function doPost(e) {
     var payload = JSON.parse(e.postData.contents);
     var action = payload.action;
     // NOTE: later tasks will add their own entries to this map
-    // (e.g. 'getConfig', 'getClaims', 'saveClaim', 'approveClaim',
-    // 'getPeriodSheet')
+    // (e.g. 'getClaims', 'approveClaim', 'getPeriodSheet')
     // as their handler functions are implemented.
     var handlers = {
       'ping': handlePing,
@@ -46,7 +45,9 @@ function doPost(e) {
       'saveUser': handleSaveUser,
       'getRates': handleGetRates,
       'saveRates': handleSaveRates,
-      'getAttendance': handleGetAttendance
+      'getAttendance': handleGetAttendance,
+      'saveClaim': handleSaveClaim,
+      'getConfig': handleGetConfig
     };
     if (!handlers[action]) throw new Error('Unknown action: ' + action);
     var result = handlers[action](payload);
@@ -347,4 +348,24 @@ function handleGetAttendance(payload) {
     });
 
   return records;
+}
+
+// ============================================================
+// SPECIAL CLAIM SUBMISSION (employee side)
+// ============================================================
+
+function handleSaveClaim(payload) {
+  // payload.claim matches Claims sheet columns
+  var sh = getSheet('Claims');
+  var id = 'C' + Date.now();
+  payload.claim.id = id;
+  payload.claim.status = 'Submitted';
+  var headers = sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
+  var row = headers.map(function(h) { return payload.claim[h] !== undefined ? payload.claim[h] : ''; });
+  sh.appendRow(row);
+  return id;
+}
+
+function handleGetConfig(payload) {
+  return sheetToObjects('Config');
 }

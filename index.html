@@ -22,7 +22,33 @@
       <h3 id="welcome-msg"></h3>
       <button onclick="logout()">Logout</button>
     </div>
-    <p>Employee period sheet and claim submission will appear here (Task 5).</p>
+
+    <div class="section-title">Submit Special Trip / Accommodation Claim</div>
+    <div class="card" style="max-width:500px;">
+      <label>Date of Trip</label>
+      <input id="cl-date" type="date" style="width:100%;padding:7px;margin:4px 0 10px;">
+      <label>Type</label>
+      <select id="cl-type" style="width:100%;padding:7px;margin:4px 0 10px;">
+        <option value="special-fare">Special Trip / Special Pay</option>
+        <option value="accommodation">Accommodation</option>
+      </select>
+      <label>From</label>
+      <input id="cl-from" type="text" placeholder="Starting point" style="width:100%;padding:7px;margin:4px 0 10px;">
+      <label>To</label>
+      <input id="cl-to" type="text" placeholder="Destination" style="width:100%;padding:7px;margin:4px 0 10px;">
+      <label>Vehicle / Mode (for special trip)</label>
+      <input id="cl-mode" type="text" placeholder="e.g. Van hire, Taxi, Grab" style="width:100%;padding:7px;margin:4px 0 10px;">
+      <label>Amount (₱)</label>
+      <input id="cl-amount" type="number" min="0" style="width:100%;padding:7px;margin:4px 0 10px;">
+      <label>Notes / Justification</label>
+      <textarea id="cl-notes" rows="3" style="width:100%;padding:7px;margin:4px 0 10px;"></textarea>
+      <label>Receipt Photo (optional but recommended)</label>
+      <input id="cl-receipt" type="file" accept="image/*" capture="environment" style="margin:4px 0 10px;">
+      <button onclick="submitClaim()">
+        Submit Claim
+      </button>
+      <p id="cl-msg" style="margin-top:8px;color:green;"></p>
+    </div>
   </div>
 
   <script src="app.js"></script>
@@ -36,10 +62,72 @@
         document.getElementById('login-view').style.display = 'none';
         document.getElementById('employee-view').style.display = 'block';
         document.getElementById('welcome-msg').textContent = 'Welcome, ' + user.name;
+        loadEmployeeConfig();
         // heads go to admin
         if (user.role === 'head') window.location.href = 'admin.html';
       });
     });
+
+    function submitClaim() {
+      var user = currentUser();
+      var dateVal = document.getElementById('cl-date').value;
+      var amount  = parseFloat(document.getElementById('cl-amount').value);
+      if (!dateVal || !amount) { alert('Date and amount are required.'); return; }
+
+      var config = getStoredConfig();
+      var claim = {
+        employee_name:   user.name,
+        date:            dateVal,
+        period_start:    config ? config.period_start : '',
+        period_end:      config ? config.period_end : '',
+        type:            document.getElementById('cl-type').value,
+        from_loc:        document.getElementById('cl-from').value.trim(),
+        to_loc:          document.getElementById('cl-to').value.trim(),
+        vehicle_mode:    document.getElementById('cl-mode').value.trim(),
+        distance_km:     '',
+        computed_amount: '',
+        claimed_amount:  amount,
+        receipt_url:     '',
+        gps_check:       'n/a',
+        status:          'Submitted',
+        approver_name:   '',
+        approved_at:     '',
+        notes:            document.getElementById('cl-notes').value.trim()
+      };
+
+      // Receipt: convert to base64 if provided
+      var file = document.getElementById('cl-receipt').files[0];
+      if (file) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          claim.receipt_url = e.target.result; // base64 data URL stored in sheet
+          api('saveClaim', { claim: claim }, function(err, id) {
+            if (err) { alert(err.message); return; }
+            document.getElementById('cl-msg').textContent = 'Claim submitted! ID: ' + id;
+          });
+        };
+        reader.readAsDataURL(file);
+      } else {
+        api('saveClaim', { claim: claim }, function(err, id) {
+          if (err) { alert(err.message); return; }
+          document.getElementById('cl-msg').textContent = 'Claim submitted! ID: ' + id;
+        });
+      }
+    }
+
+    function getStoredConfig() {
+      // Config is fetched once when page loads and cached here
+      return window._plConfig || null;
+    }
+
+    // On employee-view load, fetch config to get current period dates
+    function loadEmployeeConfig() {
+      api('getConfig', {}, function(err, data) {
+        if (err) return;
+        window._plConfig = {};
+        data.forEach(function(row) { window._plConfig[row.key] = row.value; });
+      });
+    }
   </script>
 </body>
 </html>
