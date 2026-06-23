@@ -42,6 +42,26 @@ function getConfig(key) {
   return row ? row['value'] : null;
 }
 
+// Google Sheets auto-converts a date-shaped string (e.g. "2026-06-13")
+// written into a cell into a real Date value -- this happens even when the
+// app itself writes the value via appendRow/setValues, not just when a
+// human types it in. sheetToObjects() then returns that cell as a JS Date
+// object instead of the original string, which breaks any `c['date'] ===
+// someDateString` comparison silently (this exact bug made approved
+// special-fare/accommodation/company-service claims never match their
+// period-sheet date, since 'YYYY-MM-DD' !== a Date object, ever).
+// Normalize whatever comes back to a plain 'YYYY-MM-DD' key. Critically,
+// for a Date object this must use the script's own timezone, NOT
+// toISOString()/UTC -- Sheets stores the date as local midnight, and
+// converting that to UTC can shift it onto the PREVIOUS calendar day
+// (e.g. 2026-06-13 00:00 in UTC+8 is 2026-06-12 16:00 UTC).
+function claimDateKey(v) {
+  if (v instanceof Date) {
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  return String(v).slice(0, 10);
+}
+
 function doGet(e) {
   return HtmlService.createHtmlOutput('Photoline Expense App API running.');
 }
@@ -551,7 +571,7 @@ function handleGetPeriodSheet(payload) {
     var midnight = computeMidnight(lastOut);
 
     // Find approved special claims for this date
-    var daySpecial = specialClaims.filter(function(c) { return c['date'] === date; });
+    var daySpecial = specialClaims.filter(function(c) { return claimDateKey(c['date']) === date; });
     var specialFare  = daySpecial.filter(function(c) { return c['type']==='special-fare'; })
                                  .reduce(function(s,c) { return s + parseFloat(c['claimed_amount']||0); }, 0);
     var specialAccom = daySpecial.filter(function(c) { return c['type']==='accommodation'; })
@@ -562,7 +582,7 @@ function handleGetPeriodSheet(payload) {
     // itself does not know about mother-branch — that gate is enforced here,
     // matching the original inline draft's behavior (no auto-fare at mother branch).
     var hasCompanyService = companyServiceClaims.some(function(c) {
-      return c['date'] === date;
+      return claimDateKey(c['date']) === date;
     });
     var autoFare = 0;
     if (!hasCompanyService && emp['mother_branch'] !== destination) {
