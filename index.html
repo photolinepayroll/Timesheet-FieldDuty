@@ -31,6 +31,7 @@
       <select id="cl-type" style="width:100%;padding:7px;margin:4px 0 10px;">
         <option value="special-fare">Special Trip / Special Pay</option>
         <option value="accommodation">Accommodation</option>
+        <option value="company-service">Company Service (No Fare)</option>
       </select>
       <label>From</label>
       <input id="cl-from" type="text" placeholder="Starting point" style="width:100%;padding:7px;margin:4px 0 10px;">
@@ -74,8 +75,13 @@
     function submitClaim() {
       var user = currentUser();
       var dateVal = document.getElementById('cl-date').value;
+      var claimType = document.getElementById('cl-type').value;
       var amount  = parseFloat(document.getElementById('cl-amount').value);
-      if (!dateVal || !amount) { alert('Date and amount are required.'); return; }
+      if (!dateVal || (claimType !== 'company-service' && !amount)) {
+        alert('Date and amount are required.');
+        return;
+      }
+      if (isNaN(amount)) amount = 0;
 
       var config = getStoredConfig();
       var claim = {
@@ -83,7 +89,7 @@
         date:            dateVal,
         period_start:    config ? config.period_start : '',
         period_end:      config ? config.period_end : '',
-        type:            document.getElementById('cl-type').value,
+        type:            claimType,
         from_loc:        document.getElementById('cl-from').value.trim(),
         to_loc:          document.getElementById('cl-to').value.trim(),
         vehicle_mode:    document.getElementById('cl-mode').value.trim(),
