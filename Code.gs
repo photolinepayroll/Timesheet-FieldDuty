@@ -144,6 +144,87 @@ function handleSaveRates(payload) {
   return 'saved';
 }
 
+// ============================================================
+// FARE AUTO-COMPUTE — OSRM distance + LTFRB formula
+// ============================================================
+
+function getRoadDistanceKm(lat1, lng1, lat2, lng2) {
+  try {
+    var url = 'https://router.project-osrm.org/route/v1/driving/' +
+      lng1 + ',' + lat1 + ';' + lng2 + ',' + lat2 +
+      '?overview=false';
+    var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    var json = JSON.parse(resp.getContentText());
+    if (json.code === 'Ok' && json.routes && json.routes[0]) {
+      return json.routes[0].distance / 1000; // metres → km
+    }
+  } catch(e) { /* fall through to haversine */ }
+  // Haversine fallback
+  var R = 6371;
+  var dLat = (lat2 - lat1) * Math.PI / 180;
+  var dLng = (lng2 - lng1) * Math.PI / 180;
+  var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+          Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+          Math.sin(dLng/2)*Math.sin(dLng/2);
+  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c * 1.3; // road factor
+}
+
+function computeFare(vehicleType, distanceKm) {
+  var rates = sheetToObjects('LTFRBRates');
+  var rate = rates.filter(function(r) {
+    return r['vehicle_type'] === vehicleType;
+  })[0];
+  if (!rate) throw new Error('Unknown vehicle type: ' + vehicleType);
+  var base    = parseFloat(rate['base_fare']);
+  var baseKm  = parseFloat(rate['base_km']);
+  var perKm   = parseFloat(rate['per_km']);
+  var extra   = Math.max(0, distanceKm - baseKm);
+  var fare    = base + (extra * perKm);
+  return Math.round(fare); // round to nearest peso; update if admin prefers ceil
+}
+
+// Builds an auto-fare Claims row from a single day's IN/OUT attendance pair.
+// The measured GPS distance (inRec -> outRec) is the ONE-WAY outbound leg;
+// the fare is doubled here to cover the return trip. distance_km stays the
+// one-way measured value (a factual GPS measurement) — only the fare amount
+// is doubled.
+function buildAutoFareClaim(attendanceRecord, vehicleType, employeeName, date, periodStart, periodEnd) {
+  var inRec  = attendanceRecord.in_record;
+  var outRec = attendanceRecord.out_record;
+  if (!inRec || !outRec) return null;
+  if (!inRec.lat || !inRec.lng || !outRec.lat || !outRec.lng) return null;
+
+  var distKm = getRoadDistanceKm(inRec.lat, inRec.lng, outRec.lat, outRec.lng);
+  var oneWayFare = computeFare(vehicleType, distKm);
+  var computedAmt = oneWayFare * 2; // round trip: double the fare, not the distance
+  var tolerancePct = parseFloat(getConfig('fraud_tolerance_pct') || 20);
+
+  var gpsCheck = 'ok'; // GPS was present and used
+  var status   = 'auto'; // no approval needed
+
+  return {
+    id:               '',
+    employee_name:    employeeName,
+    date:             date,
+    period_start:     periodStart,
+    period_end:       periodEnd,
+    type:             'auto-fare',
+    from_loc:         inRec.address  || (inRec.lat + ',' + inRec.lng),
+    to_loc:           outRec.address || (outRec.lat + ',' + outRec.lng),
+    vehicle_mode:     vehicleType,
+    distance_km:      Math.round(distKm * 10) / 10,
+    computed_amount:  computedAmt,
+    claimed_amount:   computedAmt,
+    receipt_url:      '',
+    gps_check:        gpsCheck,
+    status:           status,
+    approver_name:    '',
+    approved_at:      '',
+    notes:            ''
+  };
+}
+
 function handleGetAttendance(payload) {
   // payload: { period_start, period_end, employee_name (optional) }
   var csvUrl = getConfig('attendance_csv_url');
