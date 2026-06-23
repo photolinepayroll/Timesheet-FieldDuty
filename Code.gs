@@ -11,7 +11,7 @@ function getSheet(name) {
 }
 
 // Per-request cache: handleGetPeriodSheet calls sheetToObjects() for the same
-// rate sheets (MealRates/AccomRates/MidnightRates/LTFRBRates/Config) once per
+// rate sheets (EmployeeRates/MidnightRates/LTFRBRates/Config) once per
 // day in its loop. Without caching, a 15-day period re-reads each of those
 // sheets ~15 times in a single request. clearSheetCache() resets this at the
 // start of every doPost call, so nothing here can leak stale data across
@@ -152,18 +152,17 @@ function handleSaveUser(payload) {
 
 function handleGetRates(payload) {
   return {
-    meal:      sheetToObjects('MealRates'),
-    accom:     sheetToObjects('AccomRates'),
-    midnight:  sheetToObjects('MidnightRates'),
-    ltfrb:     sheetToObjects('LTFRBRates'),
-    config:    sheetToObjects('Config')
+    employeeRates: sheetToObjects('EmployeeRates'),
+    midnight:       sheetToObjects('MidnightRates'),
+    ltfrb:          sheetToObjects('LTFRBRates'),
+    config:         sheetToObjects('Config')
   };
 }
 
-var RATE_SHEET_NAMES = ['MealRates', 'AccomRates', 'MidnightRates', 'LTFRBRates'];
+var RATE_SHEET_NAMES = ['EmployeeRates', 'MidnightRates', 'LTFRBRates'];
 
 function handleSaveRates(payload) {
-  // payload.sheet = 'MealRates'|'AccomRates'|'MidnightRates'|'LTFRBRates'
+  // payload.sheet = 'EmployeeRates'|'MidnightRates'|'LTFRBRates'
   // payload.rows = array of objects matching sheet headers
   if (RATE_SHEET_NAMES.indexOf(payload.sheet) === -1) {
     throw new Error('Invalid rate sheet: ' + payload.sheet);
@@ -266,23 +265,38 @@ function buildAutoFareClaim(attendanceRecord, vehicleType, employeeName, date, p
 // ALLOWANCE / OT AUTO-COMPUTE — meal, accommodation, midnight, OT
 // ============================================================
 
-function computeMeal(employeeLevel, destinationArea, hoursWorked, motherBranch, destination) {
+// Resolves the EmployeeRates row for this employee+area: an employee-specific
+// row (employee_name matches, department blank) always wins over a
+// department-wide fallback row (employee_name blank, department matches) for
+// the same area. Returns null if neither exists.
+function resolveEmployeeRate(employeeName, department, destinationArea) {
+  var rates = sheetToObjects('EmployeeRates');
+  var empRow = rates.filter(function(r) {
+    return r['employee_name'] === employeeName && r['area'] === destinationArea;
+  })[0];
+  if (empRow) return empRow;
+  var deptRow = rates.filter(function(r) {
+    return (!r['employee_name'] || r['employee_name'] === '') &&
+           r['department'] === department && r['area'] === destinationArea;
+  })[0];
+  return deptRow || null;
+}
+
+function computeMeal(employeeName, department, destinationArea, hoursWorked, motherBranch, destination) {
   // Rule: no meal at mother branch; 5+ hours required
   if (destination === motherBranch) return 0;
   if (hoursWorked < 5) return 0;
-  var rates = sheetToObjects('MealRates');
-  var row = rates.filter(function(r) { return r['area'] === destinationArea; })[0];
+  var row = resolveEmployeeRate(employeeName, department, destinationArea);
   if (!row) return 0;
-  return parseFloat(row[employeeLevel] || 0);
+  return parseFloat(row['meal_amount'] || 0);
 }
 
-function computeAccom(employeeLevel, destinationArea, motherBranch, destination) {
+function computeAccom(employeeName, department, destinationArea, motherBranch, destination) {
   // No accommodation at mother branch
   if (destination === motherBranch) return 0;
-  var rates = sheetToObjects('AccomRates');
-  var row = rates.filter(function(r) { return r['area'] === destinationArea; })[0];
+  var row = resolveEmployeeRate(employeeName, department, destinationArea);
   if (!row) return 0;
-  return parseFloat(row[employeeLevel] || 0);
+  return parseFloat(row['accom_amount'] || 0);
 }
 
 function computeMidnight(clockOutTime) {
@@ -521,6 +535,17 @@ function handleGetPeriodSheet(payload) {
   var emp = users.filter(function(u) { return u['name'] === payload.employee_name; })[0];
   if (!emp) throw new Error('Employee not found: ' + payload.employee_name);
 
+  // Candidate area rows for THIS employee: their own employee-specific rows
+  // plus their department's fallback rows. Scoped per-employee (not the
+  // whole EmployeeRates table) because different employees/departments can
+  // use differently-named areas — a global lookup would risk matching
+  // against some other employee's area name.
+  var allEmployeeRates = sheetToObjects('EmployeeRates');
+  var candidateAreaRows = allEmployeeRates.filter(function(r) {
+    return r['employee_name'] === payload.employee_name ||
+           ((!r['employee_name'] || r['employee_name'] === '') && r['department'] === emp['department']);
+  });
+
   // Get approved special claims for this period
   var allClaims = sheetToObjects('Claims');
   var specialClaims = allClaims.filter(function(c) {
@@ -555,18 +580,17 @@ function handleGetPeriodSheet(payload) {
     // name like "SM Dagupan" — admin should ensure area names in rate tables
     // match or contain branch group names. Lookup: find area row whose name
     // is contained in the destination string, or exact match.)
-    var mealRates = sheetToObjects('MealRates');
     var destinationArea = destination; // default fallback
-    mealRates.forEach(function(r) {
+    candidateAreaRows.forEach(function(r) {
       if (destination.toLowerCase().indexOf(r['area'].toLowerCase()) !== -1) {
         destinationArea = r['area'];
       }
     });
 
     var otResult = computeOT(hoursWorked, emp['ot_type']);
-    var meal     = computeMeal(emp['position_level'], destinationArea, hoursWorked,
-                               emp['mother_branch'], destination);
-    var accom    = computeAccom(emp['position_level'], destinationArea,
+    var meal     = computeMeal(payload.employee_name, emp['department'], destinationArea,
+                               hoursWorked, emp['mother_branch'], destination);
+    var accom    = computeAccom(payload.employee_name, emp['department'], destinationArea,
                                 emp['mother_branch'], destination);
     var midnight = computeMidnight(lastOut);
 
