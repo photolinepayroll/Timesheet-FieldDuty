@@ -36,13 +36,14 @@ function doPost(e) {
     var payload = JSON.parse(e.postData.contents);
     var action = payload.action;
     // NOTE: later tasks will add their own entries to this map
-    // (e.g. 'getConfig', 'getUsers', 'saveUser', 'getRates',
-    // 'saveRates', 'getClaims', 'saveClaim', 'approveClaim',
-    // 'getPeriodSheet', 'getAttendance') as their handler functions
-    // are implemented. Only 'ping' and 'login' exist as of this task.
+    // (e.g. 'getConfig', 'getRates', 'saveRates', 'getClaims',
+    // 'saveClaim', 'approveClaim', 'getPeriodSheet', 'getAttendance')
+    // as their handler functions are implemented.
     var handlers = {
       'ping': handlePing,
-      'login': handleLogin
+      'login': handleLogin,
+      'getUsers': handleGetUsers,
+      'saveUser': handleSaveUser
     };
     if (!handlers[action]) throw new Error('Unknown action: ' + action);
     var result = handlers[action](payload);
@@ -75,4 +76,36 @@ function handleLogin(payload) {
     position_level: user['position_level'],
     ot_type: user['ot_type']
   };
+}
+
+function handleGetUsers(payload) {
+  return sheetToObjects('Users');
+}
+
+function handleSaveUser(payload) {
+  // payload.user = { id, name, department, mother_branch, position_level,
+  //                  ot_type, role, pin, active }
+  var sh = getSheet('Users');
+  var rows = sh.getDataRange().getValues();
+  var headers = rows[0];
+
+  function rowFromUser(u) {
+    return headers.map(function(h) { return u[h] !== undefined ? u[h] : ''; });
+  }
+
+  // find existing row by id
+  var found = false;
+  for (var i = 1; i < rows.length; i++) {
+    if (rows[i][0] === payload.user.id) {
+      sh.getRange(i + 1, 1, 1, headers.length).setValues([rowFromUser(payload.user)]);
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    // new user — generate id
+    payload.user.id = 'U' + Date.now();
+    sh.appendRow(rowFromUser(payload.user));
+  }
+  return payload.user.id;
 }
