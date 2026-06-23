@@ -45,6 +45,14 @@ Row semantics:
   `MealRates`/`AccomRates` did (e.g. `"NCR Area"`, `"Dagupan Area"`).
 - `meal_amount`/`accom_amount` are plain numbers, either can be `0`.
 
+Example rows (note which column is blank in each case):
+```
+Juan Dela Cruz |             | NCR Area | 150 | 0
+               | Audit Dept. | NCR Area | 100 | 0
+```
+The first row targets one specific employee; the second applies to everyone
+in the `Audit Dept.` department who has no row of their own for that area.
+
 Leave the rest of the rows empty for now (rates will be added later).
 
 ### Tab: `RawRateImport` (scratch tab)
@@ -55,7 +63,7 @@ employee_name | department | area | meal_amount | accom_amount
 ```
 This is a temporary staging tab — paste resolved real rate data here before
 a one-time import script copies it into `EmployeeRates`. It is not read by
-the app directly.
+the app directly. Leave it empty for now — populated in a later task.
 
 > **Deprecated tabs below:** `MealRates` and `AccomRates` are **deprecated
 > — superseded by `EmployeeRates`, kept only until cutover is verified (see
@@ -184,7 +192,9 @@ later task.)
 ## When you're done
 
 Once both steps above are complete, you should have:
-- A Google Sheet named `Photoline Expense App` with all 7 tabs and their
+- A Google Sheet named `Photoline Expense App` with all 9 tabs (`Users`,
+  `EmployeeRates`, `RawRateImport`, `MealRates` (deprecated), `AccomRates`
+  (deprecated), `MidnightRates`, `LTFRBRates`, `Claims`, `Config`) and their
   header rows/seed data as specified.
 - A deployed Apps Script Web App URL (`SCRIPT_URL`).
 
