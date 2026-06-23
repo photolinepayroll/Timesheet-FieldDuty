@@ -3,7 +3,7 @@
 > Read this first if picking this project back up in a new session/after a
 > context reset.
 
-## Status: original 12-task build is DONE and DEPLOYED LIVE. A new feature (Company Service) is 2/3 tasks done, waiting on a redeploy + live verification checkpoint.
+## Status: original 12-task build is DONE and DEPLOYED LIVE. Company Service feature is DONE — all 3 tasks complete, verified working live.
 
 Big change since the last version of this file: **the app is no longer just
 code — it's deployed and has been live-tested with real data.** The human
@@ -17,6 +17,8 @@ never been caught by static/synthetic review during the original build.
 ## Full commit log (newest first)
 
 ```
+375bdd7 fix: normalize Claims.date before comparing against period-sheet dates
+f0c3971 docs: update Resume.md — live deployment, bugs found/fixed, Company Service in progress
 2f972fc feat: suppress auto-fare for approved Company Service dates
 6a993ac docs: clarify why Amount is conditionally required in submitClaim
 834c769 feat: add Company Service (No Fare) claim type to submission form
@@ -110,11 +112,31 @@ attendance app was run through the live deployment:
    `getPeriodSheet` ever start failing again with no obvious code cause,
    check the Sheet cells for invisible whitespace/stray characters first** —
    these are easy to introduce via copy-paste and hard to spot visually.
+4. **Claims.date silently never matched any period-sheet date** (commit
+   `375bdd7`) — the biggest one. Google Sheets auto-converts a date-shaped
+   string written into a cell into a real Date value, EVEN when the app
+   itself writes it via `appendRow` (not just manual typing). So every claim
+   saved via `handleSaveClaim` got its `date` field silently turned into a
+   Date object; reading it back via `sheetToObjects()` returned that Date,
+   which (via `JSON.stringify`) serializes as a UTC ISO timestamp that can
+   even land on the WRONG calendar day (`"2026-06-13"` local became
+   `"2026-06-12T16:00:00.000Z"` — an 8-hour UTC offset shift). Every
+   `c['date'] === date` comparison in `handleGetPeriodSheet` — used for
+   `special-fare`, `accommodation`, AND `company-service` claims — silently
+   never matched. **This means no special-fare/accommodation claim had ever
+   actually been applying to a period sheet, this whole time**, not just the
+   new Company Service feature. Fixed with a `claimDateKey()` helper that
+   normalizes either a Date object (via `Utilities.formatDate` with the
+   script's own timezone — NOT `toISOString()`/UTC, which would reintroduce
+   the same day-shift bug) or a plain string to a `'YYYY-MM-DD'` key before
+   comparing. **If you ever add a new comparison against `Claims.date` (or
+   any other Sheets column that might hold date-shaped text), use
+   `claimDateKey()` — don't compare raw values.**
 
-## In-progress: Company Service (No Fare) claim type
+## Done: Company Service (No Fare) claim type
 
-A new feature, brainstormed and planned mid-session after live testing was
-already underway. Full docs:
+A new feature, brainstormed, planned, and fully shipped mid-session after
+live testing was already underway. Full docs:
 - Design: `docs/superpowers/specs/2026-06-23-company-service-no-fare-design.md`
 - Plan: `docs/superpowers/plans/2026-06-23-company-service-no-fare.md`
 
@@ -128,7 +150,7 @@ explicitly unaffected (confirmed with the user as in-scope boundary).
 approval-queue infrastructure unchanged — just a new `type` value
 (`'company-service'`), exactly like `'special-fare'`/`'accommodation'`.
 
-**Status: Task 1 and 2 of 3 DONE, reviewed, committed:**
+**Status: ALL 3 tasks DONE, reviewed, committed, and verified live:**
 - Task 1 (`834c769`, `6a993ac`): `index.html`'s claim form has the new
   dropdown option; Amount field is optional for this type only (normalizes
   blank/NaN to `0`).
@@ -136,17 +158,10 @@ approval-queue infrastructure unchanged — just a new `type` value
   approved company-service claim on each date before calling
   `buildAutoFareClaim`, skipping it entirely (and its OSRM network call) when
   one exists — ANDed with the existing mother-branch check, not replacing it.
-
-**Task 3 — NOT DONE, requires the human:**
-1. Redeploy `Code.gs` to Apps Script (same manual process as before — paste
-   into the Apps Script editor, Deploy → Manage deployments → New version).
-   **Must include both this feature's Code.gs changes AND the `8c649fa`
-   approve/reject fix** — they're in the same file, just paste the whole
-   current `Code.gs`.
-2. Live-verify via the API calls spelled out in the plan's Task 3 (submit a
-   company-service claim for `Louwin celis` on `2026-06-13`, confirm no
-   effect before approval, approve it using the `decision` field — NOT
-   `action` — confirm `auto_fare` becomes `0` after approval while
+- Task 3: live-verified end-to-end against the real deployment (submitted a
+  company-service claim for `Louwin celis` on `2026-06-13`, confirmed no
+  effect before approval, approved it using the `decision` field, confirmed
+  `auto_fare` became `0` after approval while
    meal/accom/midnight/ot_hours stay unchanged).
 
 ## Admin/product decisions confirmed during the build (don't re-ask if extending this app)
