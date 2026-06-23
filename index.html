@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Photoline Expense</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="login-view" class="card" style="max-width:360px;margin:60px auto;">
+    <h2 style="text-align:center;">Photoline Expense</h2>
+    <label for="inp-name">Name</label>
+    <input id="inp-name" type="text" placeholder="Your full name" style="width:100%;margin:6px 0 12px;">
+    <label for="inp-pin">PIN</label>
+    <input id="inp-pin" type="password" maxlength="4" placeholder="4-digit PIN" style="width:100%;margin:6px 0 12px;">
+    <button id="btn-login" style="width:100%;">Login</button>
+    <p id="login-error" style="color:red;text-align:center;margin-top:8px;"></p>
+  </div>
+
+  <div id="employee-view" style="display:none;max-width:900px;margin:24px auto;padding:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 id="welcome-msg"></h3>
+      <button onclick="logout()">Logout</button>
+    </div>
+    <p>Employee period sheet and claim submission will appear here (Task 5).</p>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    document.getElementById('btn-login').addEventListener('click', function() {
+      var name = document.getElementById('inp-name').value.trim();
+      var pin  = document.getElementById('inp-pin').value.trim();
+      if (!name || !pin) { document.getElementById('login-error').textContent = 'Enter name and PIN.'; return; }
+      login(name, pin, function(err, user) {
+        if (err) { document.getElementById('login-error').textContent = err.message; return; }
+        document.getElementById('login-view').style.display = 'none';
+        document.getElementById('employee-view').style.display = 'block';
+        document.getElementById('welcome-msg').textContent = 'Welcome, ' + user.name;
+        // heads go to admin
+        if (user.role === 'head') window.location.href = 'admin.html';
+      });
+    });
+  </script>
+</body>
+</html>
