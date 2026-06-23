@@ -122,9 +122,14 @@ function handleGetRates(payload) {
   };
 }
 
+var RATE_SHEET_NAMES = ['MealRates', 'AccomRates', 'MidnightRates', 'LTFRBRates'];
+
 function handleSaveRates(payload) {
   // payload.sheet = 'MealRates'|'AccomRates'|'MidnightRates'|'LTFRBRates'
   // payload.rows = array of objects matching sheet headers
+  if (RATE_SHEET_NAMES.indexOf(payload.sheet) === -1) {
+    throw new Error('Invalid rate sheet: ' + payload.sheet);
+  }
   var sh = getSheet(payload.sheet);
   var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
   // clear data rows (keep header)
