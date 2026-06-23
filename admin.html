@@ -97,8 +97,30 @@
       </div>
     </div>
 
-    <!-- Other tabs: placeholders until later tasks -->
-    <div id="tab-periods" class="tab-panel" style="display:none;">Period sheets (Task 10)</div>
+    <!-- Tab: Period Sheets -->
+    <div id="tab-periods" class="tab-panel" style="display:none;">
+      <div class="section-title">Generate Period Sheet</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;align-items:flex-end;">
+        <div>
+          <label>Employee</label><br>
+          <select id="ps-employee" style="padding:7px;min-width:200px;"></select>
+        </div>
+        <div>
+          <label>Period Start</label><br>
+          <input id="ps-start" type="date" style="padding:7px;">
+        </div>
+        <div>
+          <label>Period End</label><br>
+          <input id="ps-end" type="date" style="padding:7px;">
+        </div>
+        <button onclick="generatePeriodSheet()" style="padding:8px 18px;">
+          Generate
+        </button>
+        <button onclick="printPeriodSheet()" style="padding:8px 18px;">🖨 Print</button>
+      </div>
+
+      <div id="period-sheet-output"></div>
+    </div>
   </div>
 
   <script src="app.js"></script>
@@ -120,6 +142,7 @@
           document.getElementById('tab-' + btn.dataset.tab).style.display = 'block';
           if (btn.dataset.tab === 'rates') loadRates();
           if (btn.dataset.tab === 'claims') loadClaims();
+          if (btn.dataset.tab === 'periods') populateEmployeeDropdown();
         });
       });
     }
@@ -368,6 +391,109 @@
         if (err) { alert(err.message); return; }
         loadClaims(); // refresh
       });
+    }
+
+    // ---- Period Sheets ----
+    function populateEmployeeDropdown() {
+      api('getUsers', {}, function(err, users) {
+        if (err) return;
+        var sel = document.getElementById('ps-employee');
+        sel.innerHTML = '';
+        users.filter(function(u){ return u.active === true || u.active === 'TRUE'; })
+             .forEach(function(u) {
+               var opt = document.createElement('option');
+               opt.value = u.name; opt.textContent = u.name + ' (' + u.department + ')';
+               sel.appendChild(opt);
+             });
+      });
+    }
+
+    function generatePeriodSheet() {
+      var emp   = document.getElementById('ps-employee').value;
+      var start = document.getElementById('ps-start').value;
+      var end   = document.getElementById('ps-end').value;
+      if (!emp || !start || !end) { alert('Select employee and period dates.'); return; }
+
+      var out = document.getElementById('period-sheet-output');
+      out.innerHTML = '<p>Loading…</p>';
+
+      api('getPeriodSheet', { employee_name: emp, period_start: start, period_end: end },
+        function(err, sheet) {
+          if (err) { out.innerHTML = '<p style="color:red;">' + escapeHtml(err.message) + '</p>'; return; }
+          out.innerHTML = renderPeriodSheet(sheet);
+        }
+      );
+    }
+
+    function renderPeriodSheet(sheet) {
+      var e = sheet.employee;
+      var html = '<div id="printable-sheet">';
+      html += '<div style="display:flex;justify-content:space-between;margin-bottom:12px;">';
+      html += '<div><b>NAME:</b> ' + escapeHtml(e.name) + '<br><b>POSITION:</b> ' + escapeHtml(e.position_level) +
+              '<br><b>DEPT:</b> ' + escapeHtml(e.department) + '</div>';
+      html += '<div style="text-align:right;"><b>PERIOD:</b> ' + escapeHtml(sheet.period_start) + ' — ' + escapeHtml(sheet.period_end) + '<br>' +
+              '<b>MOTHER BRANCH:</b> ' + escapeHtml(e.mother_branch) + '</div>';
+      html += '</div>';
+      html += '<div class="table-scroll"><table>';
+      html += '<thead><tr>' +
+        '<th>DATE</th><th>BRANCH</th><th>IN</th><th>OUT</th><th>HRS</th>' +
+        '<th>OT</th><th>OFFSET</th><th>UT</th><th>OT TYPE</th>' +
+        '<th>AUTO FARE</th><th>SPECIAL FARE</th><th>TOTAL FARE</th>' +
+        '<th>MEAL</th><th>ACCOM</th><th>MIDNIGHT</th><th>TOTAL</th>' +
+        '</tr></thead><tbody>';
+      sheet.rows.forEach(function(r) {
+        html += '<tr>' +
+          '<td>' + escapeHtml(r.date) + '</td>' +
+          '<td>' + escapeHtml(r.branch) + '</td>' +
+          '<td>' + escapeHtml(r.time_in) + '</td>' +
+          '<td>' + escapeHtml(r.time_out) + '</td>' +
+          '<td>' + r.hours_worked + '</td>' +
+          '<td>' + (r.ot_hours||0) + '</td>' +
+          '<td>' + (r.offset_hours||0) + '</td>' +
+          '<td>' + (r.ut_hours||0) + '</td>' +
+          '<td><span class="badge-' + (r.ot_type==='DECLARED OT'?'approved':'pending') + '">' + escapeHtml(r.ot_type) + '</span></td>' +
+          '<td>' + formatCurrency(r.auto_fare) + '</td>' +
+          '<td>' + formatCurrency(r.special_fare) + '</td>' +
+          '<td><b>' + formatCurrency(r.total_fare) + '</b></td>' +
+          '<td>' + formatCurrency(r.meal) + '</td>' +
+          '<td>' + formatCurrency(r.accom) + '</td>' +
+          '<td>' + formatCurrency(r.midnight) + '</td>' +
+          '<td><b>' + formatCurrency(r.total_allowance) + '</b></td>' +
+          '</tr>';
+      });
+      // Totals row
+      var t = sheet.totals;
+      html += '<tr style="font-weight:bold;background:var(--blue2);color:#fff;">' +
+        '<td colspan="5">TOTALS</td>' +
+        '<td>' + t.ot_hours + '</td>' +
+        '<td>' + t.offset_hours + '</td>' +
+        '<td>' + t.ut_hours + '</td>' +
+        '<td></td>' +
+        '<td>' + formatCurrency(t.auto_fare) + '</td>' +
+        '<td>' + formatCurrency(t.special_fare) + '</td>' +
+        '<td>' + formatCurrency(t.total_fare) + '</td>' +
+        '<td>' + formatCurrency(t.meal) + '</td>' +
+        '<td>' + formatCurrency(t.accom) + '</td>' +
+        '<td>' + formatCurrency(t.midnight) + '</td>' +
+        '<td>' + formatCurrency(t.total) + '</td>' +
+        '</tr>';
+      html += '</tbody></table></div></div>';
+      return html;
+    }
+
+    function printPeriodSheet() {
+      var content = document.getElementById('printable-sheet');
+      if (!content) { alert('Generate a period sheet first.'); return; }
+      var w = window.open('', '_blank');
+      w.document.write('<html><head><title>Period Sheet</title>' +
+        '<style>body{font-family:Arial,sans-serif;font-size:12px;}' +
+        'table{border-collapse:collapse;width:100%;}' +
+        'th,td{border:1px solid #999;padding:4px 6px;}' +
+        'th{background:#1a1a2e;color:#fff;}</style></head><body>');
+      w.document.write(content.outerHTML);
+      w.document.write('</body></html>');
+      w.document.close();
+      w.print();
     }
   </script>
 </body>

@@ -35,8 +35,6 @@ function doPost(e) {
   try {
     var payload = JSON.parse(e.postData.contents);
     var action = payload.action;
-    // NOTE: later tasks will add their own entries to this map
-    // (e.g. 'getPeriodSheet') as their handler functions are implemented.
     var handlers = {
       'ping': handlePing,
       'login': handleLogin,
@@ -48,7 +46,8 @@ function doPost(e) {
       'saveClaim': handleSaveClaim,
       'getConfig': handleGetConfig,
       'getClaims': handleGetClaims,
-      'approveClaim': handleApproveClaim
+      'approveClaim': handleApproveClaim,
+      'getPeriodSheet': handleGetPeriodSheet
     };
     if (!handlers[action]) throw new Error('Unknown action: ' + action);
     var result = handlers[action](payload);
@@ -408,4 +407,125 @@ function handleApproveClaim(payload) {
     }
   }
   throw new Error('Claim not found: ' + payload.claim_id);
+}
+
+// ============================================================
+// PERIOD SHEET — assembled from attendance + auto-allowances + approved claims
+// ============================================================
+
+function handleGetPeriodSheet(payload) {
+  // payload: { employee_name, period_start, period_end }
+  var attRecords = handleGetAttendance(payload);
+  var dayMap     = {}; // date string → { ins, outs, destination, in_record, out_record }
+
+  attRecords.forEach(function(r) {
+    var date = r.timestamp.slice(0, 10);
+    if (!dayMap[date]) dayMap[date] = { ins:[], outs:[], destination: r.destination };
+    // Real attendance app writes type as 'Log In' / 'Log Out', not 'IN'/'OUT'.
+    if (r.type === 'Log In')  dayMap[date].ins.push(r);
+    if (r.type === 'Log Out') dayMap[date].outs.push(r);
+  });
+
+  // Get employee profile
+  var users = sheetToObjects('Users');
+  var emp = users.filter(function(u) { return u['name'] === payload.employee_name; })[0];
+  if (!emp) throw new Error('Employee not found: ' + payload.employee_name);
+
+  // Get approved special claims for this period
+  var allClaims = sheetToObjects('Claims');
+  var specialClaims = allClaims.filter(function(c) {
+    return c['employee_name'] === payload.employee_name &&
+           c['status'] === 'Approved' &&
+           (c['type'] === 'special-fare' || c['type'] === 'accommodation');
+  });
+
+  var rows = [];
+  var dates = Object.keys(dayMap).sort();
+
+  dates.forEach(function(date) {
+    var day    = dayMap[date];
+    day.in_record  = day.ins.length  ? day.ins[0] : null;
+    day.out_record = day.outs.length ? day.outs[day.outs.length-1] : null;
+    var firstIn  = day.in_record  ? new Date(day.in_record.timestamp)  : null;
+    var lastOut  = day.out_record ? new Date(day.out_record.timestamp) : null;
+    var hoursWorked = (firstIn && lastOut) ? (lastOut - firstIn) / 3600000 : 0;
+    var destination = day.destination || '';
+
+    // Map destination name to area (destination in attendance app may be a branch
+    // name like "SM Dagupan" — admin should ensure area names in rate tables
+    // match or contain branch group names. Lookup: find area row whose name
+    // is contained in the destination string, or exact match.)
+    var mealRates = sheetToObjects('MealRates');
+    var destinationArea = destination; // default fallback
+    mealRates.forEach(function(r) {
+      if (destination.toLowerCase().indexOf(r['area'].toLowerCase()) !== -1) {
+        destinationArea = r['area'];
+      }
+    });
+
+    var otResult = computeOT(hoursWorked, emp['ot_type']);
+    var meal     = computeMeal(emp['position_level'], destinationArea, hoursWorked,
+                               emp['mother_branch'], destination);
+    var accom    = computeAccom(emp['position_level'], destinationArea,
+                                emp['mother_branch'], destination);
+    var midnight = computeMidnight(lastOut);
+
+    // Find approved special claims for this date
+    var daySpecial = specialClaims.filter(function(c) { return c['date'] === date; });
+    var specialFare  = daySpecial.filter(function(c) { return c['type']==='special-fare'; })
+                                 .reduce(function(s,c) { return s + parseFloat(c['claimed_amount']||0); }, 0);
+    var specialAccom = daySpecial.filter(function(c) { return c['type']==='accommodation'; })
+                                 .reduce(function(s,c) { return s + parseFloat(c['claimed_amount']||0); }, 0);
+
+    // Auto-fare (LTFRB computed) — reuse buildAutoFareClaim (Task 6) rather than
+    // re-deriving the round-trip-doubled fare logic inline. buildAutoFareClaim
+    // itself does not know about mother-branch — that gate is enforced here,
+    // matching the original inline draft's behavior (no auto-fare at mother branch).
+    var autoFare = 0;
+    if (emp['mother_branch'] !== destination) {
+      // Default vehicle type: Traditional Jeepney — employee can override
+      // via special claim; auto-fare uses the cheapest standard mode.
+      var claimResult = buildAutoFareClaim(day, 'Traditional Jeepney',
+        payload.employee_name, date, payload.period_start, payload.period_end);
+      autoFare = claimResult ? claimResult.computed_amount : 0;
+    }
+
+    rows.push({
+      date:         date,
+      branch:       destination,
+      time_in:      firstIn  ? firstIn.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}) : '',
+      time_out:     lastOut  ? lastOut.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}) : '',
+      hours_worked: Math.round(hoursWorked * 10) / 10,
+      ot_hours:     Math.round(otResult.ot_hours * 10) / 10,
+      offset_hours: Math.round(otResult.offset_hours * 10) / 10,
+      ut_hours:     Math.round(otResult.ut_hours * 10) / 10,
+      ot_type:      emp['ot_type'],
+      auto_fare:    autoFare,
+      special_fare: specialFare,
+      total_fare:   autoFare + specialFare,
+      meal:         meal,
+      accom:        accom + specialAccom,
+      midnight:     midnight,
+      total_allowance: (autoFare + specialFare) + meal + (accom + specialAccom) + midnight
+    });
+  });
+
+  return {
+    employee: emp,
+    period_start: payload.period_start,
+    period_end:   payload.period_end,
+    rows: rows,
+    totals: {
+      auto_fare:    rows.reduce(function(s,r){ return s+r.auto_fare; },0),
+      special_fare: rows.reduce(function(s,r){ return s+r.special_fare; },0),
+      total_fare:   rows.reduce(function(s,r){ return s+r.total_fare; },0),
+      meal:         rows.reduce(function(s,r){ return s+r.meal; },0),
+      accom:        rows.reduce(function(s,r){ return s+r.accom; },0),
+      midnight:     rows.reduce(function(s,r){ return s+r.midnight; },0),
+      total:        rows.reduce(function(s,r){ return s+r.total_allowance; },0),
+      ot_hours:     rows.reduce(function(s,r){ return s+r.ot_hours; },0),
+      offset_hours: rows.reduce(function(s,r){ return s+r.offset_hours; },0),
+      ut_hours:     rows.reduce(function(s,r){ return s+r.ut_hours; },0)
+    }
+  };
 }
