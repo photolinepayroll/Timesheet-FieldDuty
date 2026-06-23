@@ -225,6 +225,65 @@ function buildAutoFareClaim(attendanceRecord, vehicleType, employeeName, date, p
   };
 }
 
+// ============================================================
+// ALLOWANCE / OT AUTO-COMPUTE — meal, accommodation, midnight, OT
+// ============================================================
+
+function computeMeal(employeeLevel, destinationArea, hoursWorked, motherBranch, destination) {
+  // Rule: no meal at mother branch; 5+ hours required
+  if (destination === motherBranch) return 0;
+  if (hoursWorked < 5) return 0;
+  var rates = sheetToObjects('MealRates');
+  var row = rates.filter(function(r) { return r['area'] === destinationArea; })[0];
+  if (!row) return 0;
+  return parseFloat(row[employeeLevel] || 0);
+}
+
+function computeAccom(employeeLevel, destinationArea, motherBranch, destination) {
+  // No accommodation at mother branch
+  if (destination === motherBranch) return 0;
+  var rates = sheetToObjects('AccomRates');
+  var row = rates.filter(function(r) { return r['area'] === destinationArea; })[0];
+  if (!row) return 0;
+  return parseFloat(row[employeeLevel] || 0);
+}
+
+function computeMidnight(clockOutTime) {
+  // clockOutTime: Date object
+  if (!clockOutTime) return 0;
+  var h = clockOutTime.getHours();
+  var m = clockOutTime.getMinutes();
+  var totalMin = h * 60 + m;
+
+  var brackets = sheetToObjects('MidnightRates');
+  // Sort by amount descending — apply highest matching bracket
+  brackets.sort(function(a,b) { return b['amount'] - a['amount']; });
+
+  for (var i = 0; i < brackets.length; i++) {
+    var b = brackets[i];
+    var fromMin = parseInt(b['from_hour'])*60 + parseInt(b['from_min']);
+    var toMin   = parseInt(b['to_hour'])*60   + parseInt(b['to_min']);
+    // Handle overnight brackets (e.g. 9PM=21:00 to 3AM=03:00 crosses midnight)
+    var inRange = (fromMin <= toMin)
+      ? (totalMin >= fromMin && totalMin <= toMin)
+      : (totalMin >= fromMin || totalMin <= toMin);
+    if (inRange) return parseFloat(b['amount']);
+  }
+  return 0;
+}
+
+function computeOT(hoursWorked, otType) {
+  // Confirm standard_hours with admin before setting default
+  var standardHours = parseFloat(getConfig('standard_hours') || 8);
+  var extra = hoursWorked - standardHours;
+  if (extra <= 0) return { ot_hours: 0, offset_hours: 0, ut_hours: Math.abs(extra) };
+  if (otType === 'DECLARED OT') {
+    return { ot_hours: extra, offset_hours: 0, ut_hours: 0 };
+  } else { // FOR BAWI
+    return { ot_hours: 0, offset_hours: extra, ut_hours: 0 };
+  }
+}
+
 function handleGetAttendance(payload) {
   // payload: { period_start, period_end, employee_name (optional) }
   var csvUrl = getConfig('attendance_csv_url');
