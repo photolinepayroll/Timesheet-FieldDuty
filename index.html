@@ -77,6 +77,8 @@
       var dateVal = document.getElementById('cl-date').value;
       var claimType = document.getElementById('cl-type').value;
       var amount  = parseFloat(document.getElementById('cl-amount').value);
+      // Amount is only required for special-fare/accommodation -- company
+      // service has no fare to claim, so it's exempt here.
       if (!dateVal || (claimType !== 'company-service' && !amount)) {
         alert('Date and amount are required.');
         return;
