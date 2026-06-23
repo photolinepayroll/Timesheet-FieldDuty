@@ -69,6 +69,66 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+// ---- Period Sheet rendering ----
+// Pure sheet -> HTML string function, shared by index.html (employee
+// self-service view) and admin.html (Period Sheets tab). Relies only on
+// escapeHtml() and formatCurrency() above.
+function renderPeriodSheet(sheet) {
+  var e = sheet.employee;
+  var html = '<div id="printable-sheet">';
+  html += '<div style="display:flex;justify-content:space-between;margin-bottom:12px;">';
+  html += '<div><b>NAME:</b> ' + escapeHtml(e.name) + '<br><b>POSITION:</b> ' + escapeHtml(e.position_level) +
+          '<br><b>DEPT:</b> ' + escapeHtml(e.department) + '</div>';
+  html += '<div style="text-align:right;"><b>PERIOD:</b> ' + escapeHtml(sheet.period_start) + ' — ' + escapeHtml(sheet.period_end) + '<br>' +
+          '<b>MOTHER BRANCH:</b> ' + escapeHtml(e.mother_branch) + '</div>';
+  html += '</div>';
+  html += '<div class="table-scroll"><table>';
+  html += '<thead><tr>' +
+    '<th>DATE</th><th>BRANCH</th><th>IN</th><th>OUT</th><th>HRS</th>' +
+    '<th>OT</th><th>OFFSET</th><th>UT</th><th>OT TYPE</th>' +
+    '<th>AUTO FARE</th><th>SPECIAL FARE</th><th>TOTAL FARE</th>' +
+    '<th>MEAL</th><th>ACCOM</th><th>MIDNIGHT</th><th>TOTAL</th>' +
+    '</tr></thead><tbody>';
+  sheet.rows.forEach(function(r) {
+    html += '<tr>' +
+      '<td>' + escapeHtml(r.date) + '</td>' +
+      '<td>' + escapeHtml(r.branch) + '</td>' +
+      '<td>' + escapeHtml(r.time_in) + '</td>' +
+      '<td>' + escapeHtml(r.time_out) + '</td>' +
+      '<td>' + r.hours_worked + '</td>' +
+      '<td>' + (r.ot_hours||0) + '</td>' +
+      '<td>' + (r.offset_hours||0) + '</td>' +
+      '<td>' + (r.ut_hours||0) + '</td>' +
+      '<td><span class="badge-' + (r.ot_type==='DECLARED OT'?'approved':'pending') + '">' + escapeHtml(r.ot_type) + '</span></td>' +
+      '<td>' + formatCurrency(r.auto_fare) + '</td>' +
+      '<td>' + formatCurrency(r.special_fare) + '</td>' +
+      '<td><b>' + formatCurrency(r.total_fare) + '</b></td>' +
+      '<td>' + formatCurrency(r.meal) + '</td>' +
+      '<td>' + formatCurrency(r.accom) + '</td>' +
+      '<td>' + formatCurrency(r.midnight) + '</td>' +
+      '<td><b>' + formatCurrency(r.total_allowance) + '</b></td>' +
+      '</tr>';
+  });
+  // Totals row
+  var t = sheet.totals;
+  html += '<tr style="font-weight:bold;background:var(--blue2);color:#fff;">' +
+    '<td colspan="5">TOTALS</td>' +
+    '<td>' + t.ot_hours + '</td>' +
+    '<td>' + t.offset_hours + '</td>' +
+    '<td>' + t.ut_hours + '</td>' +
+    '<td></td>' +
+    '<td>' + formatCurrency(t.auto_fare) + '</td>' +
+    '<td>' + formatCurrency(t.special_fare) + '</td>' +
+    '<td>' + formatCurrency(t.total_fare) + '</td>' +
+    '<td>' + formatCurrency(t.meal) + '</td>' +
+    '<td>' + formatCurrency(t.accom) + '</td>' +
+    '<td>' + formatCurrency(t.midnight) + '</td>' +
+    '<td>' + formatCurrency(t.total) + '</td>' +
+    '</tr>';
+  html += '</tbody></table></div></div>';
+  return html;
+}
+
 // ---- Attendance ----
 // Groups raw attendance records into day-summaries per employee
 function groupAttendanceByDay(records) {

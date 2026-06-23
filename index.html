@@ -49,6 +49,9 @@
       </button>
       <p id="cl-msg" style="margin-top:8px;color:green;"></p>
     </div>
+
+    <div class="section-title">Your Period Sheet</div>
+    <div id="emp-period-sheet"></div>
   </div>
 
   <script src="app.js"></script>
@@ -62,7 +65,7 @@
         document.getElementById('login-view').style.display = 'none';
         document.getElementById('employee-view').style.display = 'block';
         document.getElementById('welcome-msg').textContent = 'Welcome, ' + user.name;
-        loadEmployeeConfig();
+        loadEmployeeConfig(user);
         // heads go to admin
         if (user.role === 'head') window.location.href = 'admin.html';
       });
@@ -127,11 +130,35 @@
     }
 
     // On employee-view load, fetch config to get current period dates
-    function loadEmployeeConfig() {
+    function loadEmployeeConfig(user) {
       api('getConfig', {}, function(err, data) {
         if (err) return;
         window._plConfig = {};
         data.forEach(function(row) { window._plConfig[row.key] = row.value; });
+        // Heads are redirected to admin.html immediately after login and never
+        // see this page's content, so loading/rendering their period sheet
+        // here would be wasted work that's about to be thrown away.
+        if (user && user.role !== 'head') {
+          loadEmployeePeriodSheet(user, window._plConfig);
+        }
+      });
+    }
+
+    // Auto-loads the logged-in employee's own period sheet for the current
+    // period. employee_name is always sourced from the session (user.name,
+    // set at login by the server's handleLogin response) — never from any
+    // user-editable form field, URL parameter, or other client-controlled
+    // input — so an employee cannot view another employee's data.
+    function loadEmployeePeriodSheet(user, config) {
+      var out = document.getElementById('emp-period-sheet');
+      out.innerHTML = '<p>Loading your period sheet…</p>';
+      api('getPeriodSheet', {
+        employee_name: user.name,
+        period_start:  config.period_start,
+        period_end:    config.period_end
+      }, function(err, sheet) {
+        if (err) { out.innerHTML = '<p style="color:red;">' + escapeHtml(err.message) + '</p>'; return; }
+        out.innerHTML = renderPeriodSheet(sheet);
       });
     }
   </script>
