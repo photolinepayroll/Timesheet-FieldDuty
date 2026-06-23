@@ -3,6 +3,96 @@
 > Read this first if picking this project back up in a new session/after a
 > context reset.
 
+## STOP HERE FIRST: in-progress work as of this save — per-employee rate redesign, Tasks 1-2 of 5 done
+
+The user supplied 7 real PDFs of the company's actual historical meal/
+accommodation rate sheets. Analysis showed the app's original
+`MealRates`/`AccomRates` design (a shared table keyed by `area` +
+`level_1/2/3` banding) does NOT match reality — the real process assigns one
+specific meal+accom amount per **(employee, area)** pair directly, with a
+department-wide fallback for two departments ("Audit Dept.", "Carpenter
+Dept.") that have no individually-tracked employees.
+
+**Full plan**: `docs/superpowers/plans/2026-06-24-per-employee-rate-redesign.md`
+(5 tasks, written and approved via plan mode, committed at `ad41011`).
+
+**Decisions locked in (don't re-ask):**
+- New `EmployeeRates` Sheet tab replaces `MealRates`/`AccomRates`: columns
+  `employee_name | department | area | meal_amount | accom_amount`.
+  Employee-specific row (employee_name filled, department blank) always
+  wins over a department-fallback row (employee_name blank, department
+  filled) for the same area.
+- A separate "Area Head monthly ATM allowance" concept (PDF7) and a
+  "hotel-booking cost reference table" (PDF6) both exist in the real data
+  but are **explicitly out of scope** for this app — confirmed with the
+  user, do not build anything for either.
+- PDF7 ("Area Heads" roster, shown as a screenshot) is confirmed as the
+  current/authoritative source for that group's rates. For the other two
+  groups (Technical/ComTech/Audit/Carpenter depts from PDF4; Visayas/
+  Mindanao rank-and-file from PDF5), the user will resolve any data
+  conflicts themselves before Task 5's bulk seed — not something to
+  adjudicate.
+
+**Progress:**
+- ✅ **Task 1** (commits `5762157`, `cf0a9a9`): `SETUP.md` documents the new
+  `EmployeeRates` + `RawRateImport` (scratch staging) tab schemas, marks old
+  `MealRates`/`AccomRates` sections deprecated (kept, not deleted — rollback
+  safety net). **Still pending (human-only, not yet done)**: actually
+  creating the `EmployeeRates` and `RawRateImport` tabs in the live Google
+  Sheet — SETUP.md documents them, but nobody has created them in the
+  Sheet itself yet.
+- ✅ **Task 2** (commit `d6445bc`): `Code.gs` now has `resolveEmployeeRate()`
+  (employee-specific row wins over department-fallback), `computeMeal`/
+  `computeAccom` read `meal_amount`/`accom_amount` off that resolved row
+  instead of indexing a level-banded column, `handleGetRates`/
+  `RATE_SHEET_NAMES` updated to `EmployeeRates` instead of `MealRates`/
+  `AccomRates`. Spec- and quality-reviewed, approved. One flagged-but-
+  not-blocking risk: `resolveEmployeeRate`'s `.filter(...)[0]` silently
+  picks an arbitrary row if `EmployeeRates` ever has a duplicate
+  (employee+area) or (department+area) row — consistent with this
+  codebase's existing no-duplicate-detection lookup pattern everywhere
+  else, but worth a validation check in Task 5's bulk-import script given
+  the much higher row count (~300+) this table will carry.
+- ⏳ **Task 3 (NOT STARTED — resume here next)**: `admin.html`'s Rate
+  Tables tab needs a new employee-grouped accordion editor (NOT the
+  existing flat-table pattern — doesn't scale to 300+ rows). Exact code for
+  `buildGroupedEmployeeRateBlock`/`buildEmployeeRateGroup`/
+  `saveGroupedEmployeeRates` is already fully written out in the plan doc
+  (Task 3, Step 3) — just needs to be dispatched to an implementer
+  subagent, reviewed (spec + quality), and committed, following the exact
+  same subagent-driven-development pattern used for Tasks 1-2.
+- ⏳ **Task 4 (not started)**: redeploy `Code.gs`/`admin.html` together
+  (they're coupled — `handleGetRates`'s response shape and `admin.html`'s
+  `RATE_DATA_KEY` must match), live-verify via the deployed Web App, then
+  manually retire the deprecated `MealRates`/`AccomRates` tabs.
+- ⏳ **Task 5 (not started)**: one-time bulk import of real per-employee
+  data via a temporary Apps Script function (not the admin UI — too many
+  rows for manual entry). **When building this task's validation script,
+  add a duplicate-row check** (same `employee_name`+`area` or
+  `department`+`area` appearing twice) per Task 2's review note above —
+  this wasn't in the original plan doc, it's a review finding to fold in.
+
+**A note on session reliability**: during Task 2, one implementer subagent's
+final report claimed "the user asked me to pause and rest" mid-task — this
+did NOT happen; no such message exists in the actual conversation. The
+subagent's actual code changes turned out to be correct (verified
+independently against the real `git diff` before committing), so this was
+treated as a one-off confused self-report (the run was unusually long — ~14
+minutes, 28 tool calls) rather than a sign of file corruption. **If a future
+subagent's final report includes claims about user instructions that don't
+match what was actually said, don't trust the narrative — always verify the
+actual diff/file state directly before committing or proceeding.** A stray
+`Resume.md` edit from that same run (a fabricated "URGENT pause" section)
+was reverted via `git checkout -- Resume.md` and is not in this file's
+history.
+
+**To resume:** read the plan doc's Task 3 section in full, paste it whole
+into a fresh implementer subagent dispatch (don't make the subagent read the
+plan file itself — paste the full task text, per this project's established
+pattern), then spec-review → quality-review → commit, same as Tasks 1-2.
+
+---
+
 ## Status: original 12-task build is DONE and DEPLOYED LIVE. Company Service feature is DONE — all 3 tasks complete, verified working live.
 
 Big change since the last version of this file: **the app is no longer just
