@@ -509,6 +509,16 @@ function handleGetPeriodSheet(payload) {
            (c['type'] === 'special-fare' || c['type'] === 'accommodation');
   });
 
+  // Approved Company Service claims suppress that date's auto-computed
+  // fare only — meal/accom/midnight/OT are unaffected (see
+  // docs/superpowers/specs/2026-06-23-company-service-no-fare-design.md).
+  // A claim that exists but isn't yet 'Approved' has no effect here.
+  var companyServiceClaims = allClaims.filter(function(c) {
+    return c['employee_name'] === payload.employee_name &&
+           c['status'] === 'Approved' &&
+           c['type'] === 'company-service';
+  });
+
   var rows = [];
   var dates = Object.keys(dayMap).sort();
 
@@ -551,8 +561,11 @@ function handleGetPeriodSheet(payload) {
     // re-deriving the round-trip-doubled fare logic inline. buildAutoFareClaim
     // itself does not know about mother-branch — that gate is enforced here,
     // matching the original inline draft's behavior (no auto-fare at mother branch).
+    var hasCompanyService = companyServiceClaims.some(function(c) {
+      return c['date'] === date;
+    });
     var autoFare = 0;
-    if (emp['mother_branch'] !== destination) {
+    if (!hasCompanyService && emp['mother_branch'] !== destination) {
       // Default vehicle type: Traditional Jeepney — employee can override
       // via special claim; auto-fare uses the cheapest standard mode.
       var claimResult = buildAutoFareClaim(day, 'Traditional Jeepney',
