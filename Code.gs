@@ -10,15 +10,30 @@ function getSheet(name) {
   return sh;
 }
 
+// Per-request cache: handleGetPeriodSheet calls sheetToObjects() for the same
+// rate sheets (MealRates/AccomRates/MidnightRates/LTFRBRates/Config) once per
+// day in its loop. Without caching, a 15-day period re-reads each of those
+// sheets ~15 times in a single request. clearSheetCache() resets this at the
+// start of every doPost call, so nothing here can leak stale data across
+// requests or hide a write made earlier in the same request.
+var _sheetCache = {};
+
+function clearSheetCache() {
+  _sheetCache = {};
+}
+
 function sheetToObjects(name) {
+  if (_sheetCache.hasOwnProperty(name)) return _sheetCache[name];
   var sh = getSheet(name);
   var rows = sh.getDataRange().getValues();
   var headers = rows[0];
-  return rows.slice(1).map(function(row) {
+  var result = rows.slice(1).map(function(row) {
     var obj = {};
     headers.forEach(function(h, i) { obj[h] = row[i]; });
     return obj;
   });
+  _sheetCache[name] = result;
+  return result;
 }
 
 function getConfig(key) {
@@ -32,6 +47,7 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  clearSheetCache();
   try {
     var payload = JSON.parse(e.postData.contents);
     var action = payload.action;
