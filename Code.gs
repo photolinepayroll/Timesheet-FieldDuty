@@ -5,7 +5,9 @@
 var SS = SpreadsheetApp.getActiveSpreadsheet();
 
 function getSheet(name) {
-  return SS.getSheetByName(name);
+  var sh = SS.getSheetByName(name);
+  if (!sh) throw new Error('Sheet not found: ' + name);
+  return sh;
 }
 
 function sheetToObjects(name) {

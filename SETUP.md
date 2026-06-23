@@ -103,10 +103,10 @@ not placeholders**:
 
 ---
 
-## Step 3: Deploy the Apps Script as a Web App
+## Step 2: Deploy the Apps Script as a Web App
 
-(Step 2 — creating `Code.gs` — is already done in this repo. You just need to
-copy it into the Sheet's Apps Script project and deploy it.)
+(Creating `Code.gs` is already done in this repo. You just need to copy it
+into the Sheet's Apps Script project and deploy it.)
 
 1. Open the `Photoline Expense App` Google Sheet from Step 1.
 2. Go to **Extensions → Apps Script**. This opens the Apps Script editor
