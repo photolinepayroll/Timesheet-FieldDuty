@@ -55,3 +55,35 @@ function formatDate(d) {
   var dt = new Date(d);
   return dt.toLocaleDateString('en-PH');
 }
+
+// ---- Attendance ----
+// Groups raw attendance records into day-summaries per employee
+function groupAttendanceByDay(records) {
+  // returns { 'YYYY-MM-DD': { ins, outs, destination, first_in, last_out, hours_worked, in_record, out_record } }
+  var days = {};
+  records.forEach(function(r) {
+    // Real attendance app writes Timestamp as 'YYYY-MM-DD HH:MM:SS' (space-
+    // separated, not ISO). Use the space-split as the primary path; keep the
+    // T-split as a defensive fallback in case a record is ever ISO-formatted.
+    var date = r.timestamp.indexOf('T') !== -1
+      ? r.timestamp.split('T')[0]
+      : r.timestamp.split(' ')[0];
+    if (!days[date]) days[date] = { ins: [], outs: [], destination: r.destination };
+    if (r.type === 'Log In')  days[date].ins.push(r);
+    if (r.type === 'Log Out') days[date].outs.push(r);
+  });
+  // compute hours worked per day
+  Object.keys(days).forEach(function(date) {
+    var d = days[date];
+    var firstIn  = d.ins.length  ? new Date(d.ins[0].timestamp)  : null;
+    var lastOut  = d.outs.length ? new Date(d.outs[d.outs.length-1].timestamp) : null;
+    d.first_in   = firstIn;
+    d.last_out   = lastOut;
+    d.hours_worked = (firstIn && lastOut)
+      ? (lastOut - firstIn) / 3600000
+      : 0;
+    d.in_record  = d.ins[0]  || null;
+    d.out_record = d.outs[d.outs.length - 1] || null;
+  });
+  return days;
+}

@@ -37,7 +37,7 @@ function doPost(e) {
     var action = payload.action;
     // NOTE: later tasks will add their own entries to this map
     // (e.g. 'getConfig', 'getClaims', 'saveClaim', 'approveClaim',
-    // 'getPeriodSheet', 'getAttendance')
+    // 'getPeriodSheet')
     // as their handler functions are implemented.
     var handlers = {
       'ping': handlePing,
@@ -45,7 +45,8 @@ function doPost(e) {
       'getUsers': handleGetUsers,
       'saveUser': handleSaveUser,
       'getRates': handleGetRates,
-      'saveRates': handleSaveRates
+      'saveRates': handleSaveRates,
+      'getAttendance': handleGetAttendance
     };
     if (!handlers[action]) throw new Error('Unknown action: ' + action);
     var result = handlers[action](payload);
@@ -141,4 +142,59 @@ function handleSaveRates(payload) {
     sh.getRange(i + 2, 1, 1, headers.length).setValues([rowData]);
   });
   return 'saved';
+}
+
+function handleGetAttendance(payload) {
+  // payload: { period_start, period_end, employee_name (optional) }
+  var csvUrl = getConfig('attendance_csv_url');
+  if (!csvUrl) throw new Error('attendance_csv_url not set in Config.');
+  var response = UrlFetchApp.fetch(csvUrl);
+  var csv = response.getContentText();
+  var rows = Utilities.parseCsv(csv);
+  var headers = rows[0];
+
+  function idx(name) {
+    var i = headers.indexOf(name);
+    if (i === -1) throw new Error('Column not found in attendance CSV: ' + name);
+    return i;
+  }
+
+  // Map column names to indices (matches real attendance app CSV headers)
+  var COL = {
+    timestamp:   idx('Timestamp'),
+    name:        idx('Name'),
+    type:        idx('Type'),
+    destination: idx('Destination'),
+    lat:         idx('Latitude'),
+    lng:         idx('Longitude'),
+    address:     idx('Address')
+  };
+
+  var start = payload.period_start ? new Date(payload.period_start) : null;
+  var end   = payload.period_end   ? new Date(payload.period_end)   : null;
+
+  var records = rows.slice(1)
+    .filter(function(row) { return row.length > COL.name && row[COL.name]; })
+    .map(function(row) {
+      return {
+        timestamp:   row[COL.timestamp],
+        name:        row[COL.name],
+        type:        row[COL.type],
+        destination: row[COL.destination],
+        lat:         parseFloat(row[COL.lat]) || 0,
+        lng:         parseFloat(row[COL.lng]) || 0,
+        address:     row[COL.address] || ''
+      };
+    })
+    .filter(function(r) {
+      if (payload.employee_name && r.name !== payload.employee_name) return false;
+      if (start || end) {
+        var t = new Date(r.timestamp);
+        if (start && t < start) return false;
+        if (end   && t > end)   return false;
+      }
+      return true;
+    });
+
+  return records;
 }
