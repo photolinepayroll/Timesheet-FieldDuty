@@ -441,11 +441,17 @@ function handleGetPeriodSheet(payload) {
   }
 
   // Sort chronologically before pairing — handleGetAttendance doesn't
-  // guarantee CSV row order is chronological. Timestamps are all
-  // "YYYY-MM-DD HH:MM:SS" (fixed-width, zero-padded), so plain string
-  // comparison sorts them correctly without any Date-parsing/timezone risk.
+  // guarantee CSV row order is chronological. NOTE: the real attendance app
+  // does NOT always zero-pad single-digit hours (e.g. "2026-06-19 3:19:44"
+  // instead of "...03:19:44"), so plain string comparison is unsafe here —
+  // "3:19:44" sorts AFTER "18:48:53" as a string even though 3 AM is earlier
+  // in the day. Parse via Date instead. This is safe (unlike comparing a
+  // date-only string against a full timestamp elsewhere in this file): both
+  // sides here are the same "YYYY-MM-DD HH:MM:SS"-ish format, parsed the
+  // same way, so whatever timezone the runtime assumes is applied uniformly
+  // to both and their RELATIVE order comes out correct regardless.
   attRecords.sort(function(a, b) {
-    return a.timestamp < b.timestamp ? -1 : (a.timestamp > b.timestamp ? 1 : 0);
+    return new Date(a.timestamp) - new Date(b.timestamp);
   });
 
   // Pair each 'Log In' with the NEXT 'Log Out' that follows it chronologically,
