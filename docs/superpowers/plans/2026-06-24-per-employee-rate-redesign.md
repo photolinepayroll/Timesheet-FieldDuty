@@ -316,7 +316,7 @@ identical `<input data-key="...">` cell shape, so the save-side flattening
 logic stays nearly the same as today's, just scanning multiple per-employee
 `<table>`s instead of one shared `<tbody>`.
 
-- [ ] **Step 1: Update `RATE_TABLES` and `RATE_DATA_KEY`**
+- [x] **Step 1: Update `RATE_TABLES` and `RATE_DATA_KEY`**
 
   Replace `admin.html:210-237`'s `RATE_TABLES` array — remove the
   `MealRates`/`AccomRates` entries, add one `EmployeeRates` entry with a
@@ -356,7 +356,7 @@ logic stays nearly the same as today's, just scanning multiple per-employee
   };
   ```
 
-- [ ] **Step 2: Branch `loadRates()` to use the grouped renderer for `grouped: true` entries**
+- [x] **Step 2: Branch `loadRates()` to use the grouped renderer for `grouped: true` entries**
 
   Replace `loadRates()` (`admin.html:247-256`):
   ```javascript
@@ -388,7 +388,7 @@ logic stays nearly the same as today's, just scanning multiple per-employee
   }
   ```
 
-- [ ] **Step 3: Add `buildGroupedEmployeeRateBlock`, `buildEmployeeRateGroup`, `saveGroupedEmployeeRates`**
+- [x] **Step 3: Add `buildGroupedEmployeeRateBlock`, `buildEmployeeRateGroup`, `saveGroupedEmployeeRates`**
 
   Add these new functions after the existing `saveRateTable` (after
   `admin.html:340`):
@@ -542,7 +542,7 @@ logic stays nearly the same as today's, just scanning multiple per-employee
   This reuses `buildRateRow(cfg, row)` (`admin.html:314-321`) completely
   unchanged — same `<input data-key>` cell shape as the flat-table path.
 
-- [ ] **Step 4: Verify by reading the diff**
+- [x] **Step 4: Verify by reading the diff**
 
   Confirm: `buildRateTableBlock`/`buildRateRow`/`saveRateTable` (existing
   generic functions) are **unmodified** — still used as-is for
@@ -550,7 +550,7 @@ logic stays nearly the same as today's, just scanning multiple per-employee
   `employee_name`/`department` matching its own group. `RATE_TABLES`'s
   `EmployeeRates.columns` matches the schema from Task 1 exactly.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit** — `edeaf7e`
 
   ```bash
   git add admin.html

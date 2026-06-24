@@ -3,7 +3,7 @@
 > Read this first if picking this project back up in a new session/after a
 > context reset.
 
-## STOP HERE FIRST: in-progress work as of this save — per-employee rate redesign, Tasks 1-2 of 5 done
+## STOP HERE FIRST: in-progress work as of this save — per-employee rate redesign, Tasks 1-3 of 5 done
 
 The user supplied 7 real PDFs of the company's actual historical meal/
 accommodation rate sheets. Analysis showed the app's original
@@ -53,15 +53,19 @@ Dept.") that have no individually-tracked employees.
   codebase's existing no-duplicate-detection lookup pattern everywhere
   else, but worth a validation check in Task 5's bulk-import script given
   the much higher row count (~300+) this table will carry.
-- ⏳ **Task 3 (NOT STARTED — resume here next)**: `admin.html`'s Rate
-  Tables tab needs a new employee-grouped accordion editor (NOT the
-  existing flat-table pattern — doesn't scale to 300+ rows). Exact code for
-  `buildGroupedEmployeeRateBlock`/`buildEmployeeRateGroup`/
-  `saveGroupedEmployeeRates` is already fully written out in the plan doc
-  (Task 3, Step 3) — just needs to be dispatched to an implementer
-  subagent, reviewed (spec + quality), and committed, following the exact
-  same subagent-driven-development pattern used for Tasks 1-2.
-- ⏳ **Task 4 (not started)**: redeploy `Code.gs`/`admin.html` together
+- ✅ **Task 3** (commit `edeaf7e`): `admin.html`'s `RATE_TABLES`/
+  `RATE_DATA_KEY` now have one `EmployeeRates` entry (`grouped: true`)
+  instead of separate `MealRates`/`AccomRates` entries; `loadRates()`
+  branches to a new `buildGroupedEmployeeRateBlock` for grouped tables.
+  Added `buildGroupedEmployeeRateBlock`/`buildEmployeeRateGroup`/
+  `saveGroupedEmployeeRates` — a collapsible per-employee/department
+  accordion with a name-filter search box, reusing `buildRateRow()`
+  unchanged. The original `buildRateTableBlock`/`buildRateRow`/
+  `saveRateTable` are untouched and still serve `MidnightRates`/
+  `LTFRBRates`. Diff verified byte-for-byte against the plan doc before
+  committing — no deviations. **Not yet live-verified in a browser** (that's
+  Task 4, Step 4).
+- ⏳ **Task 4 (NOT STARTED — resume here next)**: redeploy `Code.gs`/`admin.html` together
   (they're coupled — `handleGetRates`'s response shape and `admin.html`'s
   `RATE_DATA_KEY` must match), live-verify via the deployed Web App, then
   manually retire the deprecated `MealRates`/`AccomRates` tabs.
