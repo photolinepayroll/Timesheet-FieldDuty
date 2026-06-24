@@ -208,17 +208,12 @@
     // Config describing each of the 4 editable rate tables: which sheet it
     // maps to, and its columns in header order (key = sheet header name).
     var RATE_TABLES = [
-      { sheet: 'MealRates',     title: 'Meal Rates',     columns: [
-        { key: 'area',     label: 'Area' },
-        { key: 'level_1',  label: 'Level 1' },
-        { key: 'level_2',  label: 'Level 2' },
-        { key: 'level_3',  label: 'Level 3' }
-      ]},
-      { sheet: 'AccomRates',    title: 'Accommodation Rates', columns: [
-        { key: 'area',     label: 'Area' },
-        { key: 'level_1',  label: 'Level 1' },
-        { key: 'level_2',  label: 'Level 2' },
-        { key: 'level_3',  label: 'Level 3' }
+      { sheet: 'EmployeeRates', title: 'Employee Meal & Accommodation Rates', grouped: true, columns: [
+        { key: 'employee_name', label: 'Employee' },
+        { key: 'department',    label: 'Dept (fallback only)' },
+        { key: 'area',          label: 'Area' },
+        { key: 'meal_amount',   label: 'Meal ₱' },
+        { key: 'accom_amount',  label: 'Accom ₱' }
       ]},
       { sheet: 'MidnightRates', title: 'Midnight Rates', columns: [
         { key: 'label',     label: 'Label' },
@@ -238,8 +233,7 @@
 
     // map of sheet -> rates key returned by handleGetRates
     var RATE_DATA_KEY = {
-      MealRates: 'meal',
-      AccomRates: 'accom',
+      EmployeeRates: 'employeeRates',
       MidnightRates: 'midnight',
       LTFRBRates: 'ltfrb'
     };
@@ -250,7 +244,10 @@
         var wrap = document.getElementById('rates-tables');
         wrap.innerHTML = '';
         RATE_TABLES.forEach(function(cfg) {
-          wrap.appendChild(buildRateTableBlock(cfg, data[RATE_DATA_KEY[cfg.sheet]] || []));
+          var rows = data[RATE_DATA_KEY[cfg.sheet]] || [];
+          wrap.appendChild(cfg.grouped
+            ? buildGroupedEmployeeRateBlock(cfg, rows)
+            : buildRateTableBlock(cfg, rows));
         });
       });
     }
@@ -323,6 +320,150 @@
     function saveRateTable(cfg) {
       var tbody = document.getElementById('rates-tbody-' + cfg.sheet);
       var rows = [].slice.call(tbody.querySelectorAll('tr')).map(function(tr) {
+        var row = {};
+        tr.querySelectorAll('input[data-key]').forEach(function(input) {
+          row[input.dataset.key] = input.value;
+        });
+        return row;
+      });
+      api('saveRates', { sheet: cfg.sheet, rows: rows }, function(err) {
+        var msg = document.getElementById('rates-msg-' + cfg.sheet);
+        if (err) { alert(err.message); return; }
+        if (msg) {
+          msg.textContent = 'Saved!';
+          setTimeout(function() { msg.textContent = ''; }, 2000);
+        }
+      });
+    }
+
+    // Renders EmployeeRates grouped into one collapsible <details> block per
+    // employee (plus a separate group per department for fallback rows), with
+    // a name-filter search box. Each block has its own small <table> — NOT one
+    // shared flat table — so 300+ rows stay navigable. "Save All" collects
+    // every <tr> across every block's table and sends them in one saveRates
+    // call, mirroring the flat-table path's flattening logic.
+    function buildGroupedEmployeeRateBlock(cfg, rows) {
+      var block = document.createElement('div');
+      block.style.marginBottom = '28px';
+
+      var title = document.createElement('div');
+      title.className = 'section-title';
+      title.textContent = cfg.title;
+      block.appendChild(title);
+
+      var search = document.createElement('input');
+      search.type = 'text';
+      search.placeholder = 'Filter by employee or department…';
+      search.style.cssText = 'width:100%;padding:7px;margin-bottom:10px;box-sizing:border-box;';
+      block.appendChild(search);
+
+      var accordion = document.createElement('div');
+      accordion.id = 'rates-employee-accordion';
+      block.appendChild(accordion);
+
+      // Group rows: employee-specific rows keyed by employee_name;
+      // department-fallback rows (blank employee_name) keyed by
+      // '[DEPT] ' + department, kept visually distinct from employee groups.
+      var groups = {}; // key -> { label, employee_name, department, rows: [] }
+      rows.forEach(function(row) {
+        var isFallback = !row['employee_name'] || row['employee_name'] === '';
+        var key = isFallback ? ('[DEPT] ' + row['department']) : row['employee_name'];
+        if (!groups[key]) {
+          groups[key] = {
+            label: isFallback ? ('Department fallback: ' + row['department']) : row['employee_name'],
+            employee_name: isFallback ? '' : row['employee_name'],
+            department: isFallback ? row['department'] : '',
+            rows: []
+          };
+        }
+        groups[key].rows.push(row);
+      });
+
+      Object.keys(groups).sort().forEach(function(key) {
+        accordion.appendChild(buildEmployeeRateGroup(cfg, groups[key]));
+      });
+
+      search.addEventListener('input', function() {
+        var q = search.value.trim().toLowerCase();
+        accordion.querySelectorAll('details.employee-rate-block').forEach(function(d) {
+          var label = d.querySelector('summary').textContent.toLowerCase();
+          d.style.display = (!q || label.indexOf(q) !== -1) ? '' : 'none';
+        });
+      });
+
+      var btnRow = document.createElement('div');
+      btnRow.style.cssText = 'margin-top:8px;display:flex;gap:8px;';
+
+      var addEmpBtn = document.createElement('button');
+      addEmpBtn.textContent = '+ Add new employee block';
+      addEmpBtn.onclick = function() {
+        var name = prompt('Employee name (must match Users sheet exactly):');
+        if (!name) return;
+        accordion.appendChild(buildEmployeeRateGroup(cfg, { label: name, employee_name: name, department: '', rows: [] }));
+      };
+
+      var addDeptBtn = document.createElement('button');
+      addDeptBtn.textContent = '+ Add new department fallback block';
+      addDeptBtn.onclick = function() {
+        var dept = prompt('Department name (must match Users.department exactly):');
+        if (!dept) return;
+        accordion.appendChild(buildEmployeeRateGroup(cfg, { label: 'Department fallback: ' + dept, employee_name: '', department: dept, rows: [] }));
+      };
+
+      var saveBtn = document.createElement('button');
+      saveBtn.textContent = 'Save All';
+      saveBtn.onclick = function() { saveGroupedEmployeeRates(cfg); };
+
+      var msg = document.createElement('span');
+      msg.id = 'rates-msg-' + cfg.sheet;
+      msg.style.cssText = 'color:green;align-self:center;';
+
+      btnRow.appendChild(addEmpBtn);
+      btnRow.appendChild(addDeptBtn);
+      btnRow.appendChild(saveBtn);
+      btnRow.appendChild(msg);
+      block.appendChild(btnRow);
+
+      return block;
+    }
+
+    function buildEmployeeRateGroup(cfg, group) {
+      var details = document.createElement('details');
+      details.className = 'employee-rate-block';
+      details.style.cssText = 'border:1px solid #ddd;border-radius:6px;margin-bottom:6px;padding:6px 10px;';
+
+      var summary = document.createElement('summary');
+      summary.textContent = group.label + ' (' + group.rows.length + ' area' + (group.rows.length === 1 ? '' : 's') + ')';
+      summary.style.cursor = 'pointer';
+      details.appendChild(summary);
+
+      var table = document.createElement('table');
+      table.style.marginTop = '8px';
+      var thead = document.createElement('thead');
+      thead.innerHTML = '<tr>' + cfg.columns.map(function(c) { return '<th>' + c.label + '</th>'; }).join('') + '<th>Actions</th></tr>';
+      table.appendChild(thead);
+      var tbody = document.createElement('tbody');
+      table.appendChild(tbody);
+      details.appendChild(table);
+
+      group.rows.forEach(function(row) { tbody.appendChild(buildRateRow(cfg, row)); });
+
+      var addRowBtn = document.createElement('button');
+      addRowBtn.textContent = '+ Add area row';
+      addRowBtn.style.marginTop = '6px';
+      addRowBtn.onclick = function() {
+        // Pre-fill employee_name/department so a new row can't end up
+        // unscoped (neither field set) by accident.
+        tbody.appendChild(buildRateRow(cfg, { employee_name: group.employee_name, department: group.department }));
+      };
+      details.appendChild(addRowBtn);
+
+      return details;
+    }
+
+    function saveGroupedEmployeeRates(cfg) {
+      var accordion = document.getElementById('rates-employee-accordion');
+      var rows = [].slice.call(accordion.querySelectorAll('tbody tr')).map(function(tr) {
         var row = {};
         tr.querySelectorAll('input[data-key]').forEach(function(input) {
           row[input.dataset.key] = input.value;
