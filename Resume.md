@@ -5,6 +5,11 @@
 
 ## STOP HERE FIRST: in-progress work as of this save — per-employee rate redesign, Tasks 1-4 of 5 done
 
+**Session paused here (2026-06-24) by the user, will resume later.** Next
+action on resume: start Task 5 (bulk import of real per-employee rate data)
+— see that task's section below for what's needed first (admin resolves
+PDF data conflicts, pastes into `RawRateImport`).
+
 The user supplied 7 real PDFs of the company's actual historical meal/
 accommodation rate sheets. Analysis showed the app's original
 `MealRates`/`AccomRates` design (a shared table keyed by `area` +
