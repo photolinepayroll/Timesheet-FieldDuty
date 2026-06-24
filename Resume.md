@@ -3,7 +3,7 @@
 > Read this first if picking this project back up in a new session/after a
 > context reset.
 
-## STOP HERE FIRST: in-progress work as of this save — per-employee rate redesign, Tasks 1-3 of 5 done
+## STOP HERE FIRST: in-progress work as of this save — per-employee rate redesign, Tasks 1-4 of 5 done
 
 The user supplied 7 real PDFs of the company's actual historical meal/
 accommodation rate sheets. Analysis showed the app's original
@@ -65,11 +65,25 @@ Dept.") that have no individually-tracked employees.
   `LTFRBRates`. Diff verified byte-for-byte against the plan doc before
   committing — no deviations. **Not yet live-verified in a browser** (that's
   Task 4, Step 4).
-- ⏳ **Task 4 (NOT STARTED — resume here next)**: redeploy `Code.gs`/`admin.html` together
-  (they're coupled — `handleGetRates`'s response shape and `admin.html`'s
-  `RATE_DATA_KEY` must match), live-verify via the deployed Web App, then
-  manually retire the deprecated `MealRates`/`AccomRates` tabs.
-- ⏳ **Task 5 (not started)**: one-time bulk import of real per-employee
+- ✅ **Task 4**: `Code.gs` redeployed via Apps Script Manage Deployments
+  (same `SCRIPT_URL`). `admin.html` needed no separate deploy step — it's a
+  static local file opened directly in Chrome/Edge, not served by `doGet`
+  (which just returns a plain-text API ping); just reopening the saved
+  local file picked up Task 3's changes. Hit one snag along the way: the
+  `EmployeeRates` tab itself had never actually been created in the live
+  Sheet (a Task 1 manual step that got skipped) — first live test failed
+  with `"Sheet not found: EmployeeRates"`. Fixed by creating the tab fresh
+  (new sheet, exact name `EmployeeRates`, not a rename of
+  `MealRates`/`AccomRates`) with the 5-column header, then re-adding the two
+  test rows (`Louwin celis`/SM/100/0 and a `Test Dept` fallback/SM/50/25).
+  After that: live `getPeriodSheet` call confirmed `Louwin celis`'s SM-area
+  days correctly show `meal: 100, accom: 0` from the new table (his
+  `position_level` is no longer consulted at all); the Rate Tables tab in
+  `admin.html` confirmed rendering as the new collapsible accordion, with
+  `MidnightRates`/`LTFRBRates` unaffected. **The old `MealRates`/`AccomRates`
+  tabs have now been deleted from the live Sheet** — the per-employee
+  redesign is fully cut over, no more rollback path via those tabs.
+- ⏳ **Task 5 (NOT STARTED — resume here next)**: one-time bulk import of real per-employee
   data via a temporary Apps Script function (not the admin UI — too many
   rows for manual entry). **When building this task's validation script,
   add a duplicate-row check** (same `employee_name`+`area` or
@@ -145,7 +159,10 @@ af57241 fix: correct stale task-number labels in admin tab placeholders
 
 ## What's deployed right now
 
-- **Live Google Sheet** with all 7 tabs, seeded per `SETUP.md`.
+- **Live Google Sheet**, now with `Users`, `EmployeeRates` (new, replaces
+  `MealRates`/`AccomRates` — see per-employee rate redesign at the top of
+  this file), `MidnightRates`, `LTFRBRates`, `Claims`, `Config`. `RawRateImport`
+  (scratch staging for Task 5's bulk import) not yet created.
 - **Live Apps Script Web App**, deployed and reachable. `app.js`'s
   `SCRIPT_URL` has the real deployment URL — **this is an UNSTAGED, UNCOMMITTED
   local change** (deliberately left out of git, it's a private URL). Don't
@@ -156,11 +173,14 @@ af57241 fix: correct stale task-number labels in admin tab placeholders
   `L`, lowercase `c`, nothing else). Also a `Test Head` user should exist for
   admin-side testing (added earlier in the session — verify it's still there
   if picking this up cold).
-- **Rate tables seeded with one row each**: `MealRates`/`AccomRates` both
-  have area `"SM"` → level_1/2/3 = `100/150/150` (Meal) and `0/150/150`
-  (Accom) — these are TEST values the user chose during live testing, not
-  necessarily final real company rates. `LTFRBRates`/`MidnightRates` have
-  their original `SETUP.md` seed data.
+- **`EmployeeRates` seeded with two TEST rows only** (not real company
+  data yet — that's Task 5): `Louwin celis` / area `SM` / meal `100` /
+  accom `0`, and a `Test Dept` department-fallback / area `SM` / meal `50`
+  / accom `25`. `LTFRBRates`/`MidnightRates` still have their original
+  `SETUP.md` seed data. The old `MealRates`/`AccomRates` tabs (and their
+  earlier test values, area `"SM"` level_1/2/3 = `100/150/150` meal,
+  `0/150/150` accom) have been deleted — no rollback path via those tabs
+  anymore.
 - **Current period in Config**: `period_start = 2026-06-11`,
   `period_end = 2026-06-25` (real values, entered as text via a leading `'`
   to prevent Sheets auto-converting them to Date objects — this matters,

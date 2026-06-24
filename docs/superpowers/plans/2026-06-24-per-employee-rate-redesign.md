@@ -571,12 +571,15 @@ breaks the Rate Tables tab, since `handleGetRates`'s response shape and
 `RATE_DATA_KEY` are coupled). `MealRates`/`AccomRates` sheets are kept as an
 inert rollback safety net until Step 5 below.
 
-- [ ] **Step 1: Redeploy `Code.gs`** (manual — same procedure as prior
+- [x] **Step 1: Redeploy `Code.gs`** (manual — same procedure as prior
   redeploys documented in `Resume.md`: paste into the Apps Script editor,
   save, Deploy → Manage deployments → edit existing deployment → New
-  version → Deploy. Same `SCRIPT_URL`, no `app.js` change.)
+  version → Deploy. Same `SCRIPT_URL`, no `app.js` change.) `admin.html`
+  needed no separate "deploy" step — it's a static local file opened
+  directly in the browser (`doGet` just returns a plain-text API ping), so
+  re-saving/reopening the local file was sufficient.
 
-- [ ] **Step 2: Seed one employee-specific row and one department-fallback row for live testing**
+- [x] **Step 2: Seed one employee-specific row and one department-fallback row for live testing**
 
   In `EmployeeRates`, add two test rows (reusing the existing test employee
   `Louwin celis` documented in `Resume.md`):
@@ -585,7 +588,14 @@ inert rollback safety net until Step 5 below.
                | Test Dept | SM | 50  | 25
   ```
 
-- [ ] **Step 3: Call `getPeriodSheet` live and confirm meal/accom match the new row**
+  Hit a snag first: the `EmployeeRates` tab itself had never actually been
+  created in the live Sheet (Task 1's Step 1 manual step was skipped) —
+  `getPeriodSheet` initially failed with `"Sheet not found: EmployeeRates"`.
+  Fixed by creating the tab fresh (new sheet, not a rename of
+  `MealRates`/`AccomRates`) with the exact header row, then re-adding the
+  two test rows.
+
+- [x] **Step 3: Call `getPeriodSheet` live and confirm meal/accom match the new row**
 
   ```powershell
   $SCRIPT_URL = "<the deployed Web App URL from app.js's SCRIPT_URL>"
@@ -594,32 +604,28 @@ inert rollback safety net until Step 5 below.
   Write-Output $r.Content
   ```
 
-  Expected: an SM-area day (not mother branch, 5+ hours) now shows
-  `meal: 100`, `accom: 0` — matching the new `EmployeeRates` row, regardless
-  of whatever `position_level` is set on `Louwin celis` (no longer consulted
-  at all).
+  **PASSED.** The `2026-06-13` "SM sta rosa" day returned `meal: 100,
+  accom: 0` — matching the new `EmployeeRates` row exactly, regardless of
+  `Louwin celis`'s `position_level` (no longer consulted at all). Other
+  SM-area days (06-18, 06-23) also picked up `meal: 100` correctly.
 
-- [ ] **Step 4: Confirm the Rate Tables tab renders correctly in the browser**
+- [x] **Step 4: Confirm the Rate Tables tab renders correctly in the browser**
 
-  Open `admin.html` → Rate Tables tab. Confirm: the "Employee Meal &
-  Accommodation Rates" block renders as collapsible per-employee/department
-  sections, not one flat table; typing "Louwin" in the filter shows only his
-  block; editing his `meal_amount` and clicking "Save All" persists; reload
-  shows the new value; `MidnightRates`/`LTFRBRates` blocks below still render
-  and save exactly as before.
+  **PASSED** (confirmed by the admin) — the "Employee Meal & Accommodation
+  Rates" block renders as collapsible per-employee/department sections, not
+  a flat table; the name filter works; `MidnightRates`/`LTFRBRates` blocks
+  still render and save exactly as before.
 
-- [ ] **Step 5: Retire `MealRates`/`AccomRates`** (manual — only after Steps
+- [x] **Step 5: Retire `MealRates`/`AccomRates`** (manual — only after Steps
   3-4 both pass)
 
-  Manually delete the `MealRates` and `AccomRates` tabs from the Sheet.
-  Nothing in `Code.gs` after Task 2 references them, so this is safe.
+  Done — the admin manually deleted both tabs from the live Sheet.
 
-- [ ] **Step 6: Report back**
+- [x] **Step 6: Report back**
 
-  No commit (verification + manual Sheet cleanup only). Report whether
-  Steps 3-4 produced the expected results, and flag any area-name mismatch
-  between real employees' `EmployeeRates` rows and their actual attendance
-  `destination` values once real data is seeded (Task 5).
+  Steps 3-4 both passed as expected. No area-name mismatches to flag yet —
+  real per-employee data hasn't been seeded (Task 5 is still pending), only
+  the two synthetic test rows above.
 
 ---
 
