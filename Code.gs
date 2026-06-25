@@ -271,6 +271,18 @@ function buildAutoFareClaim(attendanceRecord, vehicleType, employeeName, date, p
 // ALLOWANCE / OT AUTO-COMPUTE — meal, accommodation, midnight, OT
 // ============================================================
 
+// Case-insensitive name comparison: EmployeeRates.employee_name is typed in by
+// hand (often copied from all-caps PDFs) while Users.name is typed separately,
+// so the same employee can end up as "LOUWIN CELIS" in one sheet and "Louwin
+// celis" in the other. A strict === comparison silently fails to match in that
+// case — no error, just a quiet fallthrough to the generic department rate —
+// so employee_name matching against EmployeeRates is intentionally
+// case-insensitive (same reasoning as the existing .toLowerCase() area-name
+// matching elsewhere in this file).
+function namesMatch(a, b) {
+  return String(a).toLowerCase() === String(b).toLowerCase();
+}
+
 // Resolves the EmployeeRates row for this employee+area: an employee-specific
 // row (employee_name matches, department blank) always wins over a
 // department-wide fallback row (employee_name blank, department matches) for
@@ -278,7 +290,7 @@ function buildAutoFareClaim(attendanceRecord, vehicleType, employeeName, date, p
 function resolveEmployeeRate(employeeName, department, destinationArea) {
   var rates = sheetToObjects('EmployeeRates');
   var empRow = rates.filter(function(r) {
-    return r['employee_name'] === employeeName && r['area'] === destinationArea;
+    return namesMatch(r['employee_name'], employeeName) && r['area'] === destinationArea;
   })[0];
   if (empRow) return empRow;
   var deptRow = rates.filter(function(r) {
@@ -565,7 +577,8 @@ function handleGetPeriodSheet(payload) {
   // against some other employee's area name.
   var allEmployeeRates = sheetToObjects('EmployeeRates');
   var candidateAreaRows = allEmployeeRates.filter(function(r) {
-    return r['employee_name'] === payload.employee_name ||
+    // Case-insensitive: see namesMatch comment near resolveEmployeeRate for why.
+    return namesMatch(r['employee_name'], payload.employee_name) ||
            ((!r['employee_name'] || r['employee_name'] === '') && r['department'] === emp['department']);
   });
 
