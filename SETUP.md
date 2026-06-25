@@ -44,6 +44,17 @@ Row semantics:
 - `area` uses the same free-text substring-match convention as
   `MealRates`/`AccomRates` did (e.g. `"NCR Area"`, `"Dagupan Area"`).
 - `meal_amount`/`accom_amount` are plain numbers, either can be `0`.
+- If no `EmployeeRates` area name's text appears inside a day's
+  `destination` string (common for department-fallback rows using broad
+  regional names like `"NCR AREA"`, since real attendance destinations are
+  specific place names, e.g. `"Qc cityhall"`, that don't literally contain
+  the region's name), the app falls back to GPS-distance-based
+  classification using the `AreaCenters` tab (see below) — nearest
+  reference point wins, scoped to only this employee's own candidate
+  areas. If GPS is also unavailable for that day (or no `AreaCenters` row
+  exists for any candidate area), the area stays unresolved and
+  `meal_amount`/`accom_amount` will be `0` for that day, same as before
+  this fallback existed.
 
 Example rows (note which column is blank in each case):
 ```
@@ -54,6 +65,25 @@ The first row targets one specific employee; the second applies to everyone
 in the `Audit Dept.` department who has no row of their own for that area.
 
 Leave the rest of the rows empty for now (rates will be added later).
+
+### Tab: `AreaCenters`
+
+Row 1 headers:
+```
+area | lat | lng
+```
+This is a GPS-fallback reference table, used only when text-substring
+matching against `EmployeeRates` areas fails (see the note above). It is
+admin-edited, not auto-generated.
+- `area` must exactly match an existing `EmployeeRates.area` value used as
+  a department-fallback region name (e.g. `"NCR AREA"`, `"CAVITE AREA"`).
+  Matched case-insensitively.
+- `lat`/`lng` are plain decimal numbers representing ONE representative
+  point for that named region (not a polygon, not multiple points —
+  nearest-center classification needs exactly one point per area).
+- One row per area name. If an area appears in `EmployeeRates` but has no
+  `AreaCenters` row, GPS fallback simply cannot resolve that area (falls
+  through to the existing raw-`destination` default).
 
 ### Tab: `RawRateImport` (scratch tab)
 
