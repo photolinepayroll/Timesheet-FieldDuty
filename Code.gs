@@ -113,8 +113,7 @@ function handleLogin(payload) {
     role: user['role'],
     department: user['department'],
     mother_branch: user['mother_branch'],
-    position_level: user['position_level'],
-    ot_type: user['ot_type']
+    position_level: user['position_level']
   };
 }
 
@@ -124,7 +123,7 @@ function handleGetUsers(payload) {
 
 function handleSaveUser(payload) {
   // payload.user = { id, name, department, mother_branch, position_level,
-  //                  ot_type, role, pin, active }
+  //                  role, pin, active }
   var sh = getSheet('Users');
   var rows = sh.getDataRange().getValues();
   var headers = rows[0];
@@ -321,18 +320,6 @@ function computeMidnight(clockOutTime) {
     if (inRange) return parseFloat(b['amount']);
   }
   return 0;
-}
-
-function computeOT(hoursWorked, otType) {
-  // Confirm standard_hours with admin before setting default
-  var standardHours = parseFloat(getConfig('standard_hours') || 8);
-  var extra = hoursWorked - standardHours;
-  if (extra <= 0) return { ot_hours: 0, offset_hours: 0, ut_hours: Math.abs(extra) };
-  if (otType === 'DECLARED OT') {
-    return { ot_hours: extra, offset_hours: 0, ut_hours: 0 };
-  } else { // FOR BAWI
-    return { ot_hours: 0, offset_hours: extra, ut_hours: 0 };
-  }
 }
 
 function handleGetAttendance(payload) {
@@ -600,7 +587,6 @@ function handleGetPeriodSheet(payload) {
       }
     });
 
-    var otResult = computeOT(hoursWorked, emp['ot_type']);
     var meal     = computeMeal(payload.employee_name, emp['department'], destinationArea,
                                hoursWorked, emp['mother_branch'], destination);
     var accom    = computeAccom(payload.employee_name, emp['department'], destinationArea,
@@ -636,10 +622,6 @@ function handleGetPeriodSheet(payload) {
       time_in:      firstIn  ? firstIn.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}) : '',
       time_out:     lastOut  ? lastOut.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}) : '',
       hours_worked: Math.round(hoursWorked * 10) / 10,
-      ot_hours:     Math.round(otResult.ot_hours * 10) / 10,
-      offset_hours: Math.round(otResult.offset_hours * 10) / 10,
-      ut_hours:     Math.round(otResult.ut_hours * 10) / 10,
-      ot_type:      emp['ot_type'],
       auto_fare:    autoFare,
       special_fare: specialFare,
       total_fare:   autoFare + specialFare,
@@ -662,10 +644,7 @@ function handleGetPeriodSheet(payload) {
       meal:         rows.reduce(function(s,r){ return s+r.meal; },0),
       accom:        rows.reduce(function(s,r){ return s+r.accom; },0),
       midnight:     rows.reduce(function(s,r){ return s+r.midnight; },0),
-      total:        rows.reduce(function(s,r){ return s+r.total_allowance; },0),
-      ot_hours:     rows.reduce(function(s,r){ return s+r.ot_hours; },0),
-      offset_hours: rows.reduce(function(s,r){ return s+r.offset_hours; },0),
-      ut_hours:     rows.reduce(function(s,r){ return s+r.ut_hours; },0)
+      total:        rows.reduce(function(s,r){ return s+r.total_allowance; },0)
     }
   };
 }
