@@ -57,19 +57,23 @@ in a Sheet, not in code" convention (`MidnightRates`/`LTFRBRates`/
 
 ### 3.2 `Code.gs` — `handleGetPeriodSheet` / `computeMeal`
 
-For each day, before any cap-related nulling happens, capture:
+Compute the flag from the existing `firstIn`/`lastOut` locals **after** the
+20-hour sanity cap has already run (the cap nulls the local `lastOut`
+variable, not `day.out_record`):
 
 ```javascript
-var wasLogComplete = !!(day.in_record && day.out_record);
+var wasLogComplete = !!(firstIn && lastOut); // AFTER the 20-hour cap
 ```
 
-This must be captured from the raw paired Log In/Log Out records, **before**
-the existing 20-hour sanity cap potentially nulls `lastOut` to treat the day
-as incomplete. Capturing it after the cap would make a cap-nulled day
-indistinguishable from a day that was never paired at all for this specific
-flag's purposes — which is fine for case-1 classification (both should
-auto-grant), but capturing pre-cap is the only way to get a true read of
-"did both a Log In and Log Out genuinely exist."
+This must be captured post-cap, not from the raw `day.in_record`/
+`day.out_record` presence. A cap-nulled day still has both raw records
+present (the records exist; it's the 20-hour *gap* between them that's the
+problem) — so checking raw record presence would put cap-nulled days in
+the same bucket as a genuinely short, complete visit (case 2), which
+contradicts the confirmed decision that cap-nulled days auto-grant exactly
+like a missing Log Out. Reusing the already-capped `lastOut` local gets
+this right for free: it's `null` for "no Log Out", "no Log In", AND
+"capped" alike — exactly the three situations that should auto-grant.
 
 Pass `wasLogComplete` into `computeMeal` as a new parameter. New logic:
 
@@ -96,9 +100,9 @@ Request: `{ action: 'toggleMealDenial', employee_name, date, denied_by }`.
 
 Behavior: if a `MealDenials` row exists for `(employee_name, date)`, delete
 it (un-deny). If not, append one with `denied_by` and `denied_at` (server
-timestamp). Idempotent toggle, no separate "get current state" call needed
-— the response should include the new state (`{ denied: true/false }`) so
-`admin.html` can update the button label without a full re-fetch.
+timestamp). Idempotent toggle. Response: `{ denied: true/false }` (informational
+only — see 3.4 for why the client always re-fetches rather than patching the
+row in place).
 
 ### 3.4 `admin.html` — Period Sheet view
 
@@ -107,9 +111,11 @@ On every rendered row where `meal > 0`, add an Allow/Deny button:
   Meal" if currently denied (requires the period-sheet response to include
   the per-row denial state — `handleGetPeriodSheet` adds a `meal_denied:
   true/false` field per row alongside the existing `meal` field).
-- Clicking calls `toggleMealDenial`, then re-renders the Period Sheet view
-  from the response (or re-fetches) so the displayed `meal` amount and
-  button label both update immediately.
+- Clicking calls `toggleMealDenial`, then re-fetches the period sheet
+  (`getPeriodSheet`) and re-renders. The client never knows the would-be
+  `meal` amount for an un-denied row on its own (that value isn't sent down
+  when a row is currently denied), so an optimistic in-place patch isn't
+  possible — a full re-fetch is simplest and correct in both directions.
 - Button appears when `meal > 0` OR `meal_denied` is `true`. The second
   condition is required because once a row is denied, the server forces
   its displayed `meal` to `0` — without checking `meal_denied` too, the
