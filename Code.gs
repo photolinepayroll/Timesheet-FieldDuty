@@ -83,7 +83,8 @@ function doPost(e) {
       'getConfig': handleGetConfig,
       'getClaims': handleGetClaims,
       'approveClaim': handleApproveClaim,
-      'getPeriodSheet': handleGetPeriodSheet
+      'getPeriodSheet': handleGetPeriodSheet,
+      'toggleMealDenial': handleToggleMealDenial
     };
     if (!handlers[action]) throw new Error('Unknown action: ' + action);
     var result = handlers[action](payload);
@@ -502,6 +503,33 @@ function handleApproveClaim(payload) {
     }
   }
   throw new Error('Claim not found: ' + payload.claim_id);
+}
+
+function handleToggleMealDenial(payload) {
+  // payload: { employee_name, date, denied_by }
+  // Idempotent toggle: if a denial row already exists for this
+  // (employee_name, date), remove it (un-deny). Otherwise add one
+  // (deny). employee_name comes from the period sheet's own resolved
+  // employee, not hand-typed, so exact === matching is correct here
+  // (see SETUP.md's MealDenials section for why this differs from
+  // EmployeeRates' case-insensitive matching).
+  var sh = getSheet('MealDenials');
+  var rows = sh.getDataRange().getValues();
+  var headers = rows[0];
+  var nameIdx = headers.indexOf('employee_name');
+  var dateIdx = headers.indexOf('date');
+  var dateKey = claimDateKey(payload.date);
+
+  for (var i = 1; i < rows.length; i++) {
+    if (rows[i][nameIdx] === payload.employee_name &&
+        claimDateKey(rows[i][dateIdx]) === dateKey) {
+      sh.deleteRow(i + 1);
+      return { denied: false };
+    }
+  }
+
+  sh.appendRow([payload.employee_name, payload.date, payload.denied_by, new Date().toISOString()]);
+  return { denied: true };
 }
 
 // ============================================================
