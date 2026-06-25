@@ -183,6 +183,20 @@ function handleSaveRates(payload) {
 // FARE AUTO-COMPUTE — OSRM distance + LTFRB formula
 // ============================================================
 
+// Straight-line (great-circle) distance in km — NOT road distance.
+// Used for area classification (nearest AreaCenters point) where we
+// want as-the-crow-flies distance, not a road-factor estimate.
+function haversineKm(lat1, lng1, lat2, lng2) {
+  var R = 6371; // Earth radius in km
+  var dLat = (lat2 - lat1) * Math.PI / 180;
+  var dLng = (lng2 - lng1) * Math.PI / 180;
+  var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+          Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+          Math.sin(dLng/2)*Math.sin(dLng/2);
+  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
 function getRoadDistanceKm(lat1, lng1, lat2, lng2) {
   try {
     var url = 'https://router.project-osrm.org/route/v1/driving/' +
@@ -194,15 +208,8 @@ function getRoadDistanceKm(lat1, lng1, lat2, lng2) {
       return json.routes[0].distance / 1000; // metres → km
     }
   } catch(e) { /* fall through to haversine */ }
-  // Haversine fallback
-  var R = 6371;
-  var dLat = (lat2 - lat1) * Math.PI / 180;
-  var dLng = (lng2 - lng1) * Math.PI / 180;
-  var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
-          Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
-          Math.sin(dLng/2)*Math.sin(dLng/2);
-  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c * 1.3; // road factor
+  // Haversine fallback (straight-line distance x road factor)
+  return haversineKm(lat1, lng1, lat2, lng2) * 1.3; // road factor
 }
 
 function computeFare(vehicleType, distanceKm) {
@@ -279,6 +286,35 @@ function resolveEmployeeRate(employeeName, department, destinationArea) {
            r['department'] === department && r['area'] === destinationArea;
   })[0];
   return deptRow || null;
+}
+
+// GPS fallback for area classification: used only when substring
+// matching (handleGetPeriodSheet's main area-resolution loop) finds
+// no match. Finds the nearest AreaCenters row, among ONLY the area
+// names relevant to this employee (candidateAreaNames — never the
+// whole AreaCenters table, to avoid matching some other employee's
+// unrelated area), to the given lat/lng. Nearest-wins, no maximum-
+// distance cutoff (see plan's Self-Review for the risk this implies).
+// Returns the matched area name, or null if lat/lng are both 0 (no
+// GPS) or no AreaCenters row exists for any candidate area name.
+function resolveAreaByGPS(lat, lng, candidateAreaNames) {
+  if (!lat && !lng) return null; // no GPS — same convention as buildAutoFareClaim's lat/lng checks
+  var centers = sheetToObjects('AreaCenters');
+  var candidateLower = candidateAreaNames.map(function(a) { return a.toLowerCase(); });
+  var relevant = centers.filter(function(c) {
+    return candidateLower.indexOf(String(c['area']).toLowerCase()) !== -1;
+  });
+  if (!relevant.length) return null;
+  var best = null;
+  var bestDist = Infinity;
+  relevant.forEach(function(c) {
+    var d = haversineKm(lat, lng, parseFloat(c['lat']), parseFloat(c['lng']));
+    if (d < bestDist) {
+      bestDist = d;
+      best = c['area'];
+    }
+  });
+  return best;
 }
 
 function computeMeal(employeeName, department, destinationArea, hoursWorked, motherBranch, destination) {
