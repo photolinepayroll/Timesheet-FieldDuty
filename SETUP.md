@@ -85,6 +85,31 @@ admin-edited, not auto-generated.
   `AreaCenters` row, GPS fallback simply cannot resolve that area (falls
   through to the existing raw-`destination` default).
 
+### Tab: `MealDenials`
+
+Row 1 headers:
+```
+employee_name | date | denied_by | denied_at
+```
+Admin override for the meal allowance, independent of whichever rule
+(5-hour or incomplete-log auto-grant) computed a day's `meal` amount.
+One row = one denied day for one employee. Presence of a row forces
+that day's `meal` to `0` regardless of how it was computed; absence
+means the computed value (whatever rule produced it) stands. Rows are
+only ever added/removed by the app itself (the `toggleMealDenial`
+action) — never hand-edited.
+- `employee_name` must exactly match `Users.name` (case-sensitive —
+  this tab is written by the app from the already-resolved employee
+  name, not hand-typed from an external source, so no
+  case-insensitive matching is needed, unlike `EmployeeRates`).
+- `date` is `'YYYY-MM-DD'`. Sheets will auto-convert it to a real Date
+  cell on write, same as `Claims.date` — always read it back through
+  `claimDateKey()`, never compare the raw cell value to a string.
+
+Leave the rest of the rows empty for now (rows are added/removed only
+via the admin's "Deny Meal"/"Allow Meal" button in the Period Sheet
+view).
+
 ### Tab: `RawRateImport` (scratch tab)
 
 Same header row as `EmployeeRates`:
