@@ -18,7 +18,7 @@ They cannot be automated by the assistant. Follow them in order.
 
 Row 1 headers:
 ```
-id | name | department | mother_branch | position_level | ot_type | role | pin | active
+id | name | department | mother_branch | position_level | role | pin | active
 ```
 Notes:
 - `role` = `employee` or `head`
