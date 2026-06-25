@@ -31,7 +31,7 @@
         <table id="users-table">
           <thead><tr>
             <th>Name</th><th>Dept</th><th>Mother Branch</th>
-            <th>Level</th><th>OT Type</th><th>Role</th><th>Active</th><th>Actions</th>
+            <th>Level</th><th>Role</th><th>Active</th><th>Actions</th>
           </tr></thead>
           <tbody id="users-tbody"></tbody>
         </table>
@@ -52,11 +52,6 @@
           <option value="level_1">Level 1</option>
           <option value="level_2">Level 2</option>
           <option value="level_3">Level 3</option>
-        </select>
-        <label>OT Type</label>
-        <select id="uf-ot" style="width:100%;padding:7px;margin:4px 0 10px;">
-          <option value="FOR BAWI">FOR BAWI (offset)</option>
-          <option value="DECLARED OT">DECLARED OT (paid)</option>
         </select>
         <label>Role</label>
         <select id="uf-role" style="width:100%;padding:7px;margin:4px 0 10px;">
@@ -160,7 +155,6 @@
             '<td>' + u.department + '</td>' +
             '<td>' + u.mother_branch + '</td>' +
             '<td>' + u.position_level + '</td>' +
-            '<td>' + u.ot_type + '</td>' +
             '<td>' + u.role + '</td>' +
             '<td>' + (u.active ? '✓' : '✗') + '</td>' +
             '<td><button onclick="openUserForm(' + JSON.stringify(u).replace(/"/g,"'") + ')">Edit</button></td>';
@@ -177,7 +171,6 @@
       document.getElementById('uf-dept').value   = u ? u.department : '';
       document.getElementById('uf-branch').value = u ? u.mother_branch : '';
       document.getElementById('uf-level').value  = u ? u.position_level : 'level_1';
-      document.getElementById('uf-ot').value     = u ? u.ot_type : 'FOR BAWI';
       document.getElementById('uf-role').value   = u ? u.role : 'employee';
       document.getElementById('uf-pin').value    = u ? u.pin : '';
       document.getElementById('uf-active').checked = u ? u.active === true || u.active === 'TRUE' : true;
@@ -191,7 +184,6 @@
         department:     document.getElementById('uf-dept').value.trim(),
         mother_branch:  document.getElementById('uf-branch').value.trim(),
         position_level: document.getElementById('uf-level').value,
-        ot_type:        document.getElementById('uf-ot').value,
         role:           document.getElementById('uf-role').value,
         pin:            document.getElementById('uf-pin').value.trim(),
         active:         document.getElementById('uf-active').checked
@@ -603,11 +595,10 @@
 
     function exportPeriodCSV(sheet) {
       if (!sheet) { alert('Generate a period sheet first.'); return; }
-      var headers = ['Date','Branch','IN','OUT','Hours','OT','Offset','UT','OT Type',
+      var headers = ['Date','Branch','IN','OUT','Hours',
                      'Auto Fare','Special Fare','Total Fare','Meal','Accom','Midnight','Total'];
       var rows = sheet.rows.map(function(r) {
         return [r.date, r.branch, r.time_in, r.time_out, r.hours_worked,
-                r.ot_hours, r.offset_hours, r.ut_hours, r.ot_type,
                 r.auto_fare, r.special_fare, r.total_fare,
                 r.meal, r.accom, r.midnight, r.total_allowance];
       });
