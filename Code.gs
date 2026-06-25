@@ -573,6 +573,19 @@ function handleGetPeriodSheet(payload) {
     day.out_record = day.outs.length ? day.outs[day.outs.length-1] : null;
     var firstIn  = day.in_record  ? new Date(day.in_record.timestamp)  : null;
     var lastOut  = day.out_record ? new Date(day.out_record.timestamp) : null;
+
+    // Sanity cap: a Log Out paired with a stale, never-closed Log In from an
+    // earlier day (the employee forgot to log out, and no further Log In
+    // happened before the next real Log Out arrived) can span multiple days.
+    // 20 hours is well beyond any legitimate single shift, so treat such a
+    // day as incomplete — same as a Log In with no Log Out at all. The late
+    // Log Out's own data is simply dropped from this day's bucket; it is
+    // NOT re-attributed to its own day (that would require restructuring
+    // the pairing pass itself — accepted limitation, out of scope here).
+    if (firstIn && lastOut && (lastOut - firstIn) / 3600000 > 20) {
+      lastOut = null;
+    }
+
     var hoursWorked = (firstIn && lastOut) ? (lastOut - firstIn) / 3600000 : 0;
     var destination = day.destination || '';
 
