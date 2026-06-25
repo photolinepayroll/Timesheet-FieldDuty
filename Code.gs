@@ -569,6 +569,10 @@ function handleGetPeriodSheet(payload) {
            ((!r['employee_name'] || r['employee_name'] === '') && r['department'] === emp['department']);
   });
 
+  var candidateAreaNames = candidateAreaRows
+    .map(function(r) { return r['area']; })
+    .filter(function(a, i, arr) { return a && arr.indexOf(a) === i; }); // distinct, non-blank
+
   // Get approved special claims for this period
   var allClaims = sheetToObjects('Claims');
   var specialClaims = allClaims.filter(function(c) {
@@ -622,6 +626,18 @@ function handleGetPeriodSheet(payload) {
         destinationArea = r['area'];
       }
     });
+
+    // GPS fallback: only when substring matching found nothing (area-
+    // resolution rows like "NCR AREA"/"CAVITE AREA" almost never appear
+    // literally inside a real destination string like "Qc cityhall") AND
+    // this day's first Log In has real GPS. Substring match always wins
+    // when it matches — this never touches destinationArea once the loop
+    // above has already set it to something other than the raw destination.
+    if (destinationArea === destination && day.in_record &&
+        (day.in_record.lat || day.in_record.lng)) {
+      var gpsArea = resolveAreaByGPS(day.in_record.lat, day.in_record.lng, candidateAreaNames);
+      if (gpsArea) destinationArea = gpsArea;
+    }
 
     var meal     = computeMeal(payload.employee_name, emp['department'], destinationArea,
                                hoursWorked, emp['mother_branch'], destination);
