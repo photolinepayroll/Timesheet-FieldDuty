@@ -3,7 +3,98 @@
 > Read this first if picking this project back up in a new session/after a
 > context reset.
 
-## Status: app is live, expense-only (OT/UT removed), GPS-fallback area classification shipped, real per-employee rate data imported. No open work as of this save.
+## STOP HERE FIRST: in-progress design as of this save — meal-allowance incomplete-log auto-grant + admin deny override
+
+**Session continued past the previous "no open work" checkpoint below.** A
+new feature is mid-brainstorm (design proposed, NOT yet formally approved by
+the user via a written spec — they said "save in resume.md" right after
+seeing the proposed design, before an explicit final confirmation). **Do
+NOT start implementing until the design doc is written and the user
+confirms it** (per `superpowers:brainstorming`'s hard gate).
+
+**The problem:** `computeMeal()` requires `hoursWorked >= 5`, computed as
+`(lastOut - firstIn) / 3600000`. This is `0` (and thus blocks meal) in TWO
+different situations that the user wants treated differently:
+1. Log is genuinely incomplete — only a Log In OR only a Log Out exists for
+   that day (employee forgot to log the other side, or the GPS app failed).
+2. Log is complete (both Log In and Log Out exist) but the visit was
+   legitimately short (e.g. 1.1 hours) — the 5-hour rule SHOULD still apply
+   here, this is not a target of the new feature.
+
+**Decisions confirmed with the user so far (don't re-ask):**
+- For case 1 (genuinely incomplete log) only: auto-grant meal regardless of
+  the 5-hour computation, as long as `destination !== mother_branch`. Case
+  2 (complete log, short visit) keeps the existing 5-hour rule unchanged —
+  this distinction was explicitly confirmed, not assumed.
+- A day capped by the existing 20-hour sanity-cap fix (`Code.gs`, commit
+  `7d63294f`) — which nulls `lastOut` to treat the day as incomplete — will
+  ALSO qualify for the auto-grant under this new rule, since the cap
+  already treats it identically to "no Log Out at all." Not yet explicitly
+  re-confirmed with the user after this implication was pointed out, but
+  flagged as a natural consequence of the cap's existing design.
+- Admin needs a manual override: a "Deny meal" / "Allow meal" toggle button
+  in `admin.html`'s Period Sheet view, on EVERY row with `meal > 0` (not
+  just incomplete-log days — admin should be able to deny any meal,
+  confirmed explicitly).
+- The toggle must be reversible (deny, then allow again) — not a one-way
+  action.
+- Accommodation is explicitly UNAFFECTED by any of this — no rule change
+  there (it already has no hours threshold, only the mother-branch check).
+
+**Proposed architecture (presented to user, awaiting final spec
+confirmation):**
+- New `MealDenials` Sheet tab: `employee_name | date | denied_by |
+  denied_at`. One row = one denied day. Toggling adds/removes a row.
+  Consistent with this project's established "business-tunable data lives
+  in a Sheet, not in code" pattern (`MidnightRates`/`LTFRBRates`/
+  `EmployeeRates`/`AreaCenters` precedent).
+- `Code.gs`: `handleGetPeriodSheet` needs to track whether a day's log was
+  "genuinely complete" (`day.in_record && day.out_record`, captured BEFORE
+  the 20-hour cap potentially nulls `lastOut` — the cap's nulling must not
+  be confused with genuine incompleteness when deciding whether to apply
+  the new auto-grant vs. the old 5-hour rule). Pass this as a new parameter
+  to `computeMeal`. After computing `meal`, check `MealDenials` for
+  `(employee_name, date)` and force to `0` if a denial row exists.
+- New `doPost` action `toggleMealDenial`.
+- `admin.html`: new button per period-sheet row, calls the new action, then
+  re-renders.
+
+**Next action on resume:** finish the brainstorming flow — write the
+design doc to `docs/superpowers/specs/<date>-meal-incomplete-log-auto-grant-
+design.md`, get explicit user confirmation on the doc (not just the verbal
+design summary above), then invoke `superpowers:writing-plans` to produce
+an implementation plan, then `superpowers:subagent-driven-development` to
+execute task-by-task (same pattern as every other `Code.gs` change this
+session — fresh implementer subagent, spec-compliance review, then
+code-quality review, for each task).
+
+**Also fixed today, while investigating why meal allowance "wasn't
+working" for the admin (turned out to be real, unrelated data bugs, not
+the GPS-fallback feature, which was already working correctly):**
+- A new `Users` row was added for an employee with two typos: name `"jude H
+  patani"` mistyped once as `"Jude Patani"` (which broke attendance
+  lookup — `handleGetAttendance`'s name filter is exact/case-sensitive, and
+  the real attendance app logs him as `"jude H patani"` literally, with the
+  middle initial) — reverted back. Department `"Techinical"` → corrected to
+  `"Technical"` (this one was a genuine typo, kept fixed).
+- **`Users.name` must always exactly match the literal string the
+  attendance app logs** (case-sensitive, no normalization anywhere in the
+  pipeline) — do not "clean up" a `Users.name` spelling without first
+  checking what the attendance CSV actually has for that person via
+  `getAttendance`, or you will silently break their period sheet (zero
+  rows, no error).
+- `EmployeeRates.employee_name` matching IS case-insensitive (this
+  session's earlier fix, commit `4ebc0d0`) but still needs the literal text
+  (modulo case) to match `Users.name` exactly — a middle initial or other
+  literal difference still won't match even with the case-insensitive
+  helper. If `Jude Patani`'s 14 `EmployeeRates` rows still say `"JUDE
+  PATANI"` (no middle initial) as of this save, they need updating to
+  `"jude H patani"` to actually match him — check this was done before
+  trusting his rates work.
+
+---
+
+## Status: app is live, expense-only (OT/UT removed), GPS-fallback area classification shipped, real per-employee rate data imported. Three workstreams below are DONE; see "STOP HERE FIRST" above for what's in progress on top of this.
 
 This session did three big things, all shipped, reviewed, redeployed, and
 live-verified:
