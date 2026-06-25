@@ -1,6 +1,6 @@
 // app.js — shared by index.html and admin.html
 
-var SCRIPT_URL = 'PASTE_YOUR_DEPLOYMENT_URL_HERE';
+var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1nwaPJuGeqYQOFu9Jwre5AzgnPMkJp8wWdSwgi-U9YTCiB_ZvAJ6juoGSv3JfwmKxKQ/exec';
 
 // ---- API ----
 function api(action, params, cb) {
@@ -85,7 +85,6 @@ function renderPeriodSheet(sheet) {
   html += '<div class="table-scroll"><table>';
   html += '<thead><tr>' +
     '<th>DATE</th><th>BRANCH</th><th>IN</th><th>OUT</th><th>HRS</th>' +
-    '<th>OT</th><th>OFFSET</th><th>UT</th><th>OT TYPE</th>' +
     '<th>AUTO FARE</th><th>SPECIAL FARE</th><th>TOTAL FARE</th>' +
     '<th>MEAL</th><th>ACCOM</th><th>MIDNIGHT</th><th>TOTAL</th>' +
     '</tr></thead><tbody>';
@@ -96,10 +95,6 @@ function renderPeriodSheet(sheet) {
       '<td>' + escapeHtml(r.time_in) + '</td>' +
       '<td>' + escapeHtml(r.time_out) + '</td>' +
       '<td>' + r.hours_worked + '</td>' +
-      '<td>' + (r.ot_hours||0) + '</td>' +
-      '<td>' + (r.offset_hours||0) + '</td>' +
-      '<td>' + (r.ut_hours||0) + '</td>' +
-      '<td><span class="badge-' + (r.ot_type==='DECLARED OT'?'approved':'pending') + '">' + escapeHtml(r.ot_type) + '</span></td>' +
       '<td>' + formatCurrency(r.auto_fare) + '</td>' +
       '<td>' + formatCurrency(r.special_fare) + '</td>' +
       '<td><b>' + formatCurrency(r.total_fare) + '</b></td>' +
@@ -113,10 +108,6 @@ function renderPeriodSheet(sheet) {
   var t = sheet.totals;
   html += '<tr style="font-weight:bold;background:var(--blue2);color:#fff;">' +
     '<td colspan="5">TOTALS</td>' +
-    '<td>' + t.ot_hours + '</td>' +
-    '<td>' + t.offset_hours + '</td>' +
-    '<td>' + t.ut_hours + '</td>' +
-    '<td></td>' +
     '<td>' + formatCurrency(t.auto_fare) + '</td>' +
     '<td>' + formatCurrency(t.special_fare) + '</td>' +
     '<td>' + formatCurrency(t.total_fare) + '</td>' +
