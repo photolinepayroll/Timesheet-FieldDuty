@@ -110,8 +110,12 @@ On every rendered row where `meal > 0`, add an Allow/Deny button:
 - Clicking calls `toggleMealDenial`, then re-renders the Period Sheet view
   from the response (or re-fetches) so the displayed `meal` amount and
   button label both update immediately.
-- Button only appears when `meal > 0` — a row with `meal === 0` (blocked by
-  either rule, undenied) has nothing to toggle.
+- Button appears when `meal > 0` OR `meal_denied` is `true`. The second
+  condition is required because once a row is denied, the server forces
+  its displayed `meal` to `0` — without checking `meal_denied` too, the
+  button would disappear on deny and the admin could never re-allow it. A
+  row with `meal === 0` and `meal_denied === false` (blocked by either
+  rule, never denied) has nothing to toggle and shows no button.
 
 ## 4. Testing
 
@@ -128,5 +132,8 @@ On every rendered row where `meal > 0`, add an Allow/Deny button:
   previously-computed non-zero value, button reads "Deny Meal" again.
 - A row with `meal === 0` (either rule legitimately blocking it, not
   denied): no toggle button rendered.
+- A denied row (`meal === 0`, `meal_denied === true`): toggle button IS
+  still rendered (reading "Allow Meal"), so the admin can reverse the
+  denial.
 - Accommodation, fare, and midnight allowance values are unchanged across
   all of the above scenarios.
