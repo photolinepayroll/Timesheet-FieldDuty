@@ -3,327 +3,273 @@
 > Read this first if picking this project back up in a new session/after a
 > context reset.
 
-## STOP HERE FIRST: in-progress work as of this save — per-employee rate redesign, Tasks 1-4 of 5 done
+## Status: app is live, expense-only (OT/UT removed), GPS-fallback area classification shipped, real per-employee rate data imported. No open work as of this save.
 
-**Session paused here (2026-06-24) by the user, will resume later.** Next
-action on resume: start Task 5 (bulk import of real per-employee rate data)
-— see that task's section below for what's needed first (admin resolves
-PDF data conflicts, pastes into `RawRateImport`).
+This session did three big things, all shipped, reviewed, redeployed, and
+live-verified:
 
-The user supplied 7 real PDFs of the company's actual historical meal/
-accommodation rate sheets. Analysis showed the app's original
-`MealRates`/`AccomRates` design (a shared table keyed by `area` +
-`level_1/2/3` banding) does NOT match reality — the real process assigns one
-specific meal+accom amount per **(employee, area)** pair directly, with a
-department-wide fallback for two departments ("Audit Dept.", "Carpenter
-Dept.") that have no individually-tracked employees.
-
-**Full plan**: `docs/superpowers/plans/2026-06-24-per-employee-rate-redesign.md`
-(5 tasks, written and approved via plan mode, committed at `ad41011`).
-
-**Decisions locked in (don't re-ask):**
-- New `EmployeeRates` Sheet tab replaces `MealRates`/`AccomRates`: columns
-  `employee_name | department | area | meal_amount | accom_amount`.
-  Employee-specific row (employee_name filled, department blank) always
-  wins over a department-fallback row (employee_name blank, department
-  filled) for the same area.
-- A separate "Area Head monthly ATM allowance" concept (PDF7) and a
-  "hotel-booking cost reference table" (PDF6) both exist in the real data
-  but are **explicitly out of scope** for this app — confirmed with the
-  user, do not build anything for either.
-- PDF7 ("Area Heads" roster, shown as a screenshot) is confirmed as the
-  current/authoritative source for that group's rates. For the other two
-  groups (Technical/ComTech/Audit/Carpenter depts from PDF4; Visayas/
-  Mindanao rank-and-file from PDF5), the user will resolve any data
-  conflicts themselves before Task 5's bulk seed — not something to
-  adjudicate.
-
-**Progress:**
-- ✅ **Task 1** (commits `5762157`, `cf0a9a9`): `SETUP.md` documents the new
-  `EmployeeRates` + `RawRateImport` (scratch staging) tab schemas, marks old
-  `MealRates`/`AccomRates` sections deprecated (kept, not deleted — rollback
-  safety net). **Still pending (human-only, not yet done)**: actually
-  creating the `EmployeeRates` and `RawRateImport` tabs in the live Google
-  Sheet — SETUP.md documents them, but nobody has created them in the
-  Sheet itself yet.
-- ✅ **Task 2** (commit `d6445bc`): `Code.gs` now has `resolveEmployeeRate()`
-  (employee-specific row wins over department-fallback), `computeMeal`/
-  `computeAccom` read `meal_amount`/`accom_amount` off that resolved row
-  instead of indexing a level-banded column, `handleGetRates`/
-  `RATE_SHEET_NAMES` updated to `EmployeeRates` instead of `MealRates`/
-  `AccomRates`. Spec- and quality-reviewed, approved. One flagged-but-
-  not-blocking risk: `resolveEmployeeRate`'s `.filter(...)[0]` silently
-  picks an arbitrary row if `EmployeeRates` ever has a duplicate
-  (employee+area) or (department+area) row — consistent with this
-  codebase's existing no-duplicate-detection lookup pattern everywhere
-  else, but worth a validation check in Task 5's bulk-import script given
-  the much higher row count (~300+) this table will carry.
-- ✅ **Task 3** (commit `edeaf7e`): `admin.html`'s `RATE_TABLES`/
-  `RATE_DATA_KEY` now have one `EmployeeRates` entry (`grouped: true`)
-  instead of separate `MealRates`/`AccomRates` entries; `loadRates()`
-  branches to a new `buildGroupedEmployeeRateBlock` for grouped tables.
-  Added `buildGroupedEmployeeRateBlock`/`buildEmployeeRateGroup`/
-  `saveGroupedEmployeeRates` — a collapsible per-employee/department
-  accordion with a name-filter search box, reusing `buildRateRow()`
-  unchanged. The original `buildRateTableBlock`/`buildRateRow`/
-  `saveRateTable` are untouched and still serve `MidnightRates`/
-  `LTFRBRates`. Diff verified byte-for-byte against the plan doc before
-  committing — no deviations. **Not yet live-verified in a browser** (that's
-  Task 4, Step 4).
-- ✅ **Task 4**: `Code.gs` redeployed via Apps Script Manage Deployments
-  (same `SCRIPT_URL`). `admin.html` needed no separate deploy step — it's a
-  static local file opened directly in Chrome/Edge, not served by `doGet`
-  (which just returns a plain-text API ping); just reopening the saved
-  local file picked up Task 3's changes. Hit one snag along the way: the
-  `EmployeeRates` tab itself had never actually been created in the live
-  Sheet (a Task 1 manual step that got skipped) — first live test failed
-  with `"Sheet not found: EmployeeRates"`. Fixed by creating the tab fresh
-  (new sheet, exact name `EmployeeRates`, not a rename of
-  `MealRates`/`AccomRates`) with the 5-column header, then re-adding the two
-  test rows (`Louwin celis`/SM/100/0 and a `Test Dept` fallback/SM/50/25).
-  After that: live `getPeriodSheet` call confirmed `Louwin celis`'s SM-area
-  days correctly show `meal: 100, accom: 0` from the new table (his
-  `position_level` is no longer consulted at all); the Rate Tables tab in
-  `admin.html` confirmed rendering as the new collapsible accordion, with
-  `MidnightRates`/`LTFRBRates` unaffected. **The old `MealRates`/`AccomRates`
-  tabs have now been deleted from the live Sheet** — the per-employee
-  redesign is fully cut over, no more rollback path via those tabs.
-- ⏳ **Task 5 (NOT STARTED — resume here next)**: one-time bulk import of real per-employee
-  data via a temporary Apps Script function (not the admin UI — too many
-  rows for manual entry). **When building this task's validation script,
-  add a duplicate-row check** (same `employee_name`+`area` or
-  `department`+`area` appearing twice) per Task 2's review note above —
-  this wasn't in the original plan doc, it's a review finding to fold in.
-
-**A note on session reliability**: during Task 2, one implementer subagent's
-final report claimed "the user asked me to pause and rest" mid-task — this
-did NOT happen; no such message exists in the actual conversation. The
-subagent's actual code changes turned out to be correct (verified
-independently against the real `git diff` before committing), so this was
-treated as a one-off confused self-report (the run was unusually long — ~14
-minutes, 28 tool calls) rather than a sign of file corruption. **If a future
-subagent's final report includes claims about user instructions that don't
-match what was actually said, don't trust the narrative — always verify the
-actual diff/file state directly before committing or proceeding.** A stray
-`Resume.md` edit from that same run (a fabricated "URGENT pause" section)
-was reverted via `git checkout -- Resume.md` and is not in this file's
-history.
-
-**To resume:** read the plan doc's Task 3 section in full, paste it whole
-into a fresh implementer subagent dispatch (don't make the subagent read the
-plan file itself — paste the full task text, per this project's established
-pattern), then spec-review → quality-review → commit, same as Tasks 1-2.
+1. **Removed OT/UT/Offset entirely** — the app is now expense-only (fare,
+   meal, accommodation, midnight allowance). Also fixed a real live bug
+   (impossible 68hr/103hr `hours_worked` values).
+2. **Added GPS-distance-based area classification** as a fallback to the
+   existing text-substring area matching, fixing real `meal: 0` bugs for
+   employees whose actual destinations (e.g. "Qc cityhall") don't textually
+   contain a department-fallback area's regional name (e.g. "NCR AREA").
+3. **Bulk-imported real per-employee rate data** from the company's actual
+   rate sheets (2 images: ~15 Area Heads + 6 individually-named employees +
+   ComTech department row), and fixed a real, previously-invisible bug where
+   employee-specific `EmployeeRates` rows silently never matched due to a
+   casing mismatch against `Users.name`.
 
 ---
 
-## Status: original 12-task build is DONE and DEPLOYED LIVE. Company Service feature is DONE — all 3 tasks complete, verified working live.
+## 1. OT/UT/Offset removal + hours-pairing sanity cap
 
-Big change since the last version of this file: **the app is no longer just
-code — it's deployed and has been live-tested with real data.** The human
-created the Google Sheet, deployed `Code.gs` as an Apps Script Web App, and
-pasted the real `SCRIPT_URL` into `app.js` (uncommitted locally, on purpose
-— it's a private deployment URL, not committed to git, currently sitting as
-an unstaged working-tree change). Live testing against a real employee
-(`Louwin celis`) surfaced and fixed several real bugs (see below) that had
-never been caught by static/synthetic review during the original build.
+**Why:** the user decided the app should stop computing OT (overtime)/UT
+(undertime)/Offset hours entirely and become expense-only. Separately, while
+tracing this, a real live bug surfaced: `hours_worked` showed 68 hours
+(employee "Emmerson", 2026-06-06) and 103.2 hours (same employee, 2026-06-20)
+— physically impossible for one day.
 
-## Full commit log (newest first)
+**Root cause of the hours bug:** `handleGetPeriodSheet`'s Log In/Log Out
+pairing loop keeps a Log In "open" until the next Log Out arrives, however
+many days later, if the employee forgot to log out and no further Log In
+happened first. That distant Log Out gets bucketed into the stale day.
+
+**Fix shipped:**
+- `Code.gs`: added a 20-hour sanity cap — if a day's paired Log-In-to-Log-Out
+  gap exceeds 20 hours, treat the day as incomplete (0 hours, blank
+  `time_out`), same as the existing "no Log Out at all" case. Commit
+  `7d63294f`.
+- `Code.gs`: deleted `computeOT()` and all `ot_hours`/`offset_hours`/
+  `ut_hours`/`ot_type` fields from `handleGetPeriodSheet`'s per-row/totals
+  objects and `handleLogin`'s returned profile. Commit `d150af2`.
+- `admin.html`: removed the OT Type table column, form field, and CSV
+  export columns. Commit `74c05e5`.
+- `app.js` (shared renderer for both `admin.html` and `index.html`): removed
+  the OT/OFFSET/UT/OT TYPE table columns. Commit `dc02218`.
+- **Incident during this work**: the `app.js` commit above accidentally
+  swept in an unrelated, pre-existing uncommitted change (the real
+  `SCRIPT_URL`, which is deliberately kept out of git as a private
+  deployment URL). Caught and reverted in a follow-up commit `357ae48`, then
+  restored as an uncommitted local-only change again, matching the
+  established convention. **If you ever see `app.js` modified in `git
+  status`, that's expected and correct — do not commit it.**
+- `Users` sheet: `ot_type` column deleted manually from the live Sheet (no
+  longer read/written anywhere in code). `SETUP.md` updated to match
+  (commit `6059097`).
+
+**Time_in/time_out/hours_worked were deliberately KEPT** (still drive the
+5-hour meal-eligibility rule) — only OT/UT/Offset-specific fields and UI
+were removed.
+
+---
+
+## 2. GPS-distance-based area classification (fallback)
+
+**Why:** `EmployeeRates` department-fallback rows use broad regional area
+names (`"NCR AREA"`, `"CAVITE AREA"`, etc.), but real attendance destinations
+are specific place names (`"Qc cityhall"`, `"Sm trece"`) that don't
+textually contain the region's name. The existing text-substring match
+(`handleGetPeriodSheet`'s area-resolution loop) almost never matched these,
+silently producing `meal: 0`/`accom: 0` for entire departments (confirmed
+live for employee "Emmerson", department HR).
+
+**Fix shipped (purely additive — substring match still always wins when it
+matches; GPS is a fallback, never an override):**
+- New `AreaCenters` Sheet tab (`area | lat | lng`) — one admin-edited
+  reference point per regional area name. Documented in `SETUP.md`.
+  Currently seeded with: NCR AREA (14.5995, 120.9842), CAVITE AREA (14.2456,
+  120.8786), PAMPANGA AREA (15.0794, 120.6200), OLONGAPO AREA (14.8294,
+  120.2828), DAGUPAN AREA (16.0433, 120.3439), LAGUNA AREA (14.2691,
+  121.3700), BICOL AREA (13.1391, 123.7438), VIZ/MIN AREA (10.3157,
+  123.8854) — provincial-capital/major-city defaults, admin-confirmed as-is.
+- `Code.gs`: extracted a straight-line-only `haversineKm()` helper out of
+  `getRoadDistanceKm`'s existing road-distance fallback (which still applies
+  its own 1.3x road factor at its own call site — `haversineKm` itself has
+  no factor, since area classification wants as-the-crow-flies distance).
+  Added `resolveAreaByGPS(lat, lng, candidateAreaNames)` — finds the nearest
+  `AreaCenters` row among only this employee's own candidate area names.
+  Commit `ba68f83`.
+- `Code.gs`: wired this into `handleGetPeriodSheet` as a fallback, gated on
+  "substring loop found nothing" (`destinationArea === destination`) AND
+  the day's first Log In having real GPS. Commit `78c26f1`.
+- Redeployed and live-verified: Emmerson's NCR-area days (e.g. "Qc cityhall")
+  now correctly show `meal: 75` instead of `0`.
+
+**Known, accepted limitations (not bugs, deliberate scope decisions):**
+- No maximum-distance cutoff — `resolveAreaByGPS` always returns the
+  nearest candidate, however far away. An employee genuinely in a region
+  with no close candidate area would still get force-matched to the
+  nearest one.
+- Days with `lat`/`lng` both `0` (no GPS) are unfixed — same as before, only
+  text-substring matching applies, usually `meal: 0`.
+- One representative point per region is a simplification, especially for
+  `"VIZ/MIN AREA"` (spans Visayas AND Mindanao).
+- `AreaCenters` row-name typos fail silently (no validation) — same
+  no-validation-lookup convention as the rest of this codebase.
+
+---
+
+## 3. Bulk rate data import + case-insensitive employee_name fix
+
+**Why:** the admin supplied 2 images of the real, authoritative company rate
+sheets. Cross-checking against live `EmployeeRates` revealed 14 of 15 real
+"Area Heads" (only Crispin Casil was previously imported) and 6 more
+individually-named employees were completely missing, plus a "ComTech"
+department had zero coverage, plus the one real live-tested employee
+(Louwin Celis) had wrong numbers (relying on the generic "Technical"
+fallback when his real rate differs on 3 areas).
+
+**Imported via the existing `RawRateImport` → `oneTimeImportEmployeeRates`
+one-time Apps Script function** (re-pasted each time it's needed — it's
+intentionally not kept permanently in `Code.gs`). `handleSaveRates` does a
+**full replace** of `EmployeeRates` (clears all data rows, writes only
+what's passed), so every `RawRateImport` paste must include ALL rows that
+should still exist, not just new ones — learned this the hard way mid-import
+this session, now documented here so it isn't re-discovered painfully next
+time.
+
+**Final imported total: 179 rows** — 17 named employees (Crispin Casil +
+15 Area Heads + Louwin Celis's 3-area override) plus 5 department-fallback
+groups (Auditing, CARPENTERS, Technical, HR, ComTech — 42 rows total). All
+spot-checked against the source images and confirmed exact.
+
+**A real bug found and fixed during this import:** employee-specific
+`EmployeeRates` rows were entered as `"LOUWIN CELIS"` (all caps, matching
+the source image's style) while the canonical `Users.name` is `"Louwin
+celis"` (mixed case). `resolveEmployeeRate`'s and `candidateAreaRows`'s
+employee_name comparisons were case-SENSITIVE (`===`), so this silently
+never matched — meaning **Louwin's employee-specific override rates had
+never actually applied this whole time**, with zero error, quietly falling
+through to the generic department rate instead. Fixed by adding a
+`namesMatch()` case-insensitive helper, used in exactly those two
+comparison sites only (not `Users.name` lookups elsewhere, not
+`Claims.employee_name`, not the attendance CSV's name field — those are
+flagged as having the same theoretical risk but explicitly left out of
+scope since no live incident has been reported there). Commit `4ebc0d0`.
+Live-verified via a temporary test row (added, confirmed it fired, then
+removed) that substring match still correctly wins over GPS fallback even
+with the case-insensitive comparison in place.
+
+**If you ever add more rate data for a named employee, double-check the
+`employee_name` spelling is otherwise correct (typos still won't match,
+this fix only handles case) and that the source PDF/image's all-caps
+convention doesn't introduce a new mismatch with how that name appears in
+`Users`.**
+
+---
+
+## Full commit log (newest first, this session's additions on top)
 
 ```
-375bdd7 fix: normalize Claims.date before comparing against period-sheet dates
-f0c3971 docs: update Resume.md — live deployment, bugs found/fixed, Company Service in progress
-2f972fc feat: suppress auto-fare for approved Company Service dates
-6a993ac docs: clarify why Amount is conditionally required in submitClaim
-834c769 feat: add Company Service (No Fare) claim type to submission form
-75d455d docs: add implementation plan for Company Service (No Fare) claim type
-8c649fa fix: rename approve/reject decision field from "action" to "decision"
-f0d43d4 docs: add design spec for Company Service (No Fare) claim type
-42a208b fix: sort attendance records by parsed Date, not raw timestamp string
-906c7d0 fix: pair Log In/Log Out chronologically instead of bucketing by own date
-8c7a720 docs: update Resume.md — all 12 plan tasks complete
-64e2fcb feat: CSV export for period sheets, README as entry-point doc
-dc782a3 feat: employee self-service — own period sheet visible after login
-ffffeed perf: cache sheetToObjects() reads for the duration of one request
-f5fafce feat: period sheet — assembled from attendance + auto-allowances + approved claims
-cb45870 docs: explain why claim id is left unescaped in onclick attribute
-46a1027 feat: approval queue — heads can approve/reject special claims
-c732921 fix: document base64 receipt size limitation, dedupe submitClaim callback
-9aee557 feat: special claim submission with receipt photo capture
-df16370 feat: auto-compute meal, accommodation, midnight allowance, OT/offset/UT
-2138c83 feat: fare auto-compute — OSRM distance + LTFRB formula + haversine fallback
-be29f49 fix: compare date strings instead of Date objects in handleGetAttendance
-193f237 feat: read attendance CSV from existing app, group by day
-1ff3c5b fix: whitelist sheet names in handleSaveRates
-0fdfa58 feat: rate table admin — meal, accom, midnight, LTFRB editable tables
-af57241 fix: correct stale task-number labels in admin tab placeholders
-6099c4f feat: employee setup — add/edit users with level, OT type, role, PIN
-1d38205 feat: login with PIN, session auth, role-based redirect
-2d5dc9a fix: add missing-sheet error guard, fix SETUP.md step numbering
-3267baa feat: scaffold — sheet structure, Apps Script stub, styles
+4ebc0d0 fix: case-insensitive employee_name matching in EmployeeRates lookups
+78c26f1 feat: GPS-distance fallback for area classification when substring match fails
+ba68f83 feat: extract straight-line Haversine helper, add GPS-based area resolver
+4e17187 docs: document AreaCenters schema for GPS-fallback area classification
+6059097 docs: drop ot_type from Users sheet schema docs
+357ae48 fix: revert accidentally-committed SCRIPT_URL, restore placeholder
+dc02218 feat: remove OT/UT/Offset columns from shared period-sheet renderer
+74c05e5 feat: remove OT/UT/Offset fields from admin Users UI and CSV export
+d150af2 feat: remove OT/UT/Offset computation, descope app to expense-only
+7d63294f fix: cap hours_worked at 20h to reject stale Log-In/distant Log-Out mispairs
+--- (older history: per-employee rate redesign, Company Service claim type,
+    live-testing bug fixes — see `git log` for full history before this
+    session) ---
 ```
 
 ## What's deployed right now
 
-- **Live Google Sheet**, now with `Users`, `EmployeeRates` (new, replaces
-  `MealRates`/`AccomRates` — see per-employee rate redesign at the top of
-  this file), `MidnightRates`, `LTFRBRates`, `Claims`, `Config`. `RawRateImport`
-  (scratch staging for Task 5's bulk import) not yet created.
-- **Live Apps Script Web App**, deployed and reachable. `app.js`'s
-  `SCRIPT_URL` has the real deployment URL — **this is an UNSTAGED, UNCOMMITTED
-  local change** (deliberately left out of git, it's a private URL). Don't
-  let a future `git status` cleanup accidentally discard it.
-- **One test employee** in the `Users` sheet: `Louwin celis` / PIN `1111` /
-  role `employee` — a REAL employee name matched against real attendance
-  records (verified exact spelling against the live attendance CSV: capital
-  `L`, lowercase `c`, nothing else). Also a `Test Head` user should exist for
-  admin-side testing (added earlier in the session — verify it's still there
-  if picking this up cold).
-- **`EmployeeRates` seeded with two TEST rows only** (not real company
-  data yet — that's Task 5): `Louwin celis` / area `SM` / meal `100` /
-  accom `0`, and a `Test Dept` department-fallback / area `SM` / meal `50`
-  / accom `25`. `LTFRBRates`/`MidnightRates` still have their original
-  `SETUP.md` seed data. The old `MealRates`/`AccomRates` tabs (and their
-  earlier test values, area `"SM"` level_1/2/3 = `100/150/150` meal,
-  `0/150/150` accom) have been deleted — no rollback path via those tabs
-  anymore.
+- **Live Google Sheet**, tabs: `Users` (no `ot_type` column anymore),
+  `EmployeeRates` (179 rows, real company data), `AreaCenters` (new, 8
+  rows), `MidnightRates`, `LTFRBRates`, `Claims`, `Config`, `RawRateImport`
+  (scratch staging, reused each bulk-import — admin's call whether to keep
+  as audit trail).
+- **Live Apps Script Web App**, deployed and reachable, redeployed multiple
+  times this session with all changes above. `app.js`'s `SCRIPT_URL` has the
+  real deployment URL — **this is an UNSTAGED, UNCOMMITTED local change**
+  (deliberately left out of git, it's a private URL — see the incident
+  note above if this ever looks "modified" in git status, that's correct).
+- **Real Users**: `Louwin celis` (department Technical, real attendance,
+  fully live-tested), `Emmerson` (department HR, real attendance,
+  live-tested this session), `Admin`/`Test Head` (role `head`, for admin
+  testing).
+- **EmployeeRates**: real company data for 15 Area Heads (PDF7-style
+  roster), 6 more individually-named employees, Crispin Casil (no live
+  Users account — rates exist but dormant until/unless he's added),
+  Louwin Celis (3-area override + generic Technical fallback for the
+  rest), and 5 department-fallback groups (Auditing, CARPENTERS, Technical,
+  HR, ComTech).
 - **Current period in Config**: `period_start = 2026-06-11`,
-  `period_end = 2026-06-25` (real values, entered as text via a leading `'`
-  to prevent Sheets auto-converting them to Date objects — this matters,
-  see "Known gaps" below).
+  `period_end = 2026-06-25`.
 
-## Critical bugs found via live testing (all fixed, but redeploy required — see below)
+## Admin/product decisions confirmed during this session (don't re-ask)
 
-These were NEVER caught during the original build's spec/quality review,
-because that review only ever traced code statically or against synthetic
-data — none of it caught these until real GPS/timestamp data from the real
-attendance app was run through the live deployment:
+1. **App is expense-only now** — fare, meal, accommodation, midnight. No
+   OT/UT/Offset tracking at all, anywhere.
+2. **GPS fallback never overrides a working substring match** — confirmed
+   both by code-level review and a live test (temporary test row on Louwin
+   Celis, removed after verification).
+3. **20-hour cap** on Log-In/Log-Out pairing — gaps beyond this are treated
+   as incomplete days (0 hours), not capped/truncated.
+4. **`AreaCenters` coordinates** use provincial-capital/major-city defaults
+   as-is, admin-confirmed, no per-employee or finer-grained overrides
+   requested.
+5. **ComTech modeled as one shared department-fallback row** (not
+   per-employee), since all current ComTech members share identical rates —
+   same reasoning applied to Technical's other members besides Louwin.
+6. **Jude Patani's two conflicting source listings** (personal 14-area list
+   vs. a slightly different combo under "TECHNICAL DEPT.") — admin chose
+   his personal listing as authoritative, the other was discarded.
+7. **"NONE"-marked cells in the source images = ₱0/₱0**, same treatment as
+   a dash.
+8. **No `Users` rows created for the 20 newly-imported names** — their
+   `EmployeeRates` rows sit dormant harmlessly until/if they're ever added
+   as real users.
+9. **`employee_name` matching against `EmployeeRates` is case-insensitive**;
+   matching against `Claims`/attendance-CSV names is explicitly still
+   case-sensitive (flagged as same-risk but out of scope, no live incident
+   reported there yet).
 
-1. **Overnight-shift day-grouping bug** (commits `906c7d0`, `42a208b`).
-   `handleGetPeriodSheet` used to bucket attendance records by each record's
-   OWN calendar date, so a shift crossing midnight (clock in 10PM, clock out
-   3AM next day) got split into two separate days, BOTH showing as 0 hours
-   worked / full undertime. Fixed by sorting all records chronologically (via
-   `Date` parsing, NOT string comparison — the real attendance app does NOT
-   always zero-pad single-digit hours, e.g. `"2026-06-19 3:19:44"`, which
-   broke a first attempt at this fix that used string sort) and pairing each
-   Log In with the next Log Out that follows it, attributing the whole shift
-   to the date it started on.
-2. **Approve/Reject buttons completely non-functional** (commit `8c649fa`).
-   `api()` in `app.js` does `Object.assign({action: dispatchAction}, params)`
-   — later sources win, so `admin.html`'s `approveReject()` sending its own
-   `action: 'approve'/'reject'` field silently overwrote the dispatch key
-   `'approveClaim'` before `doPost` ever saw it. Every Approve/Reject click
-   failed with `"Unknown action: approve"`. This bug existed since Task 9
-   (commit `46a1027`) — copied verbatim from the original plan document's
-   own example code — and was only discovered while writing live-API test
-   steps for the NEW Company Service feature below. **Fixed by renaming the
-   field to `decision`** in both `admin.html`'s call and `Code.gs`'s
-   `handleApproveClaim`. If you ever add another `api()` call that needs a
-   param also called `action`, rename it — this collision pattern WILL
-   recur otherwise.
-3. **Sheet data-entry typos** (not code bugs, fixed directly in the live
-   Sheet, not via commit): `Config.attendance_csv_url` had a stray trailing
-   backtick character (likely from copy-pasting a markdown-formatted URL out
-   of a chat message) which broke the CSV fetch entirely; `LTFRBRates`'
-   header cell had a trailing space (`"vehicle_type "` instead of
-   `"vehicle_type"`), which broke `computeFare`'s lookup for every call. Both
-   fixed by the user directly in the Sheet UI. **If `getAttendance` or
-   `getPeriodSheet` ever start failing again with no obvious code cause,
-   check the Sheet cells for invisible whitespace/stray characters first** —
-   these are easy to introduce via copy-paste and hard to spot visually.
-4. **Claims.date silently never matched any period-sheet date** (commit
-   `375bdd7`) — the biggest one. Google Sheets auto-converts a date-shaped
-   string written into a cell into a real Date value, EVEN when the app
-   itself writes it via `appendRow` (not just manual typing). So every claim
-   saved via `handleSaveClaim` got its `date` field silently turned into a
-   Date object; reading it back via `sheetToObjects()` returned that Date,
-   which (via `JSON.stringify`) serializes as a UTC ISO timestamp that can
-   even land on the WRONG calendar day (`"2026-06-13"` local became
-   `"2026-06-12T16:00:00.000Z"` — an 8-hour UTC offset shift). Every
-   `c['date'] === date` comparison in `handleGetPeriodSheet` — used for
-   `special-fare`, `accommodation`, AND `company-service` claims — silently
-   never matched. **This means no special-fare/accommodation claim had ever
-   actually been applying to a period sheet, this whole time**, not just the
-   new Company Service feature. Fixed with a `claimDateKey()` helper that
-   normalizes either a Date object (via `Utilities.formatDate` with the
-   script's own timezone — NOT `toISOString()`/UTC, which would reintroduce
-   the same day-shift bug) or a plain string to a `'YYYY-MM-DD'` key before
-   comparing. **If you ever add a new comparison against `Claims.date` (or
-   any other Sheets column that might hold date-shaped text), use
-   `claimDateKey()` — don't compare raw values.**
-
-## Done: Company Service (No Fare) claim type
-
-A new feature, brainstormed, planned, and fully shipped mid-session after
-live testing was already underway. Full docs:
-- Design: `docs/superpowers/specs/2026-06-23-company-service-no-fare-design.md`
-- Plan: `docs/superpowers/plans/2026-06-23-company-service-no-fare.md`
-
-**What it does:** lets an employee declare that a specific date had no
-personal transport cost (a company vehicle picked them up). Once a head
-approves it (same existing approval queue, no new mechanism), that exact
-date's auto-computed fare becomes ₱0 — meal/accommodation/midnight/OT are
-explicitly unaffected (confirmed with the user as in-scope boundary).
-
-**Implementation approach:** reuses the existing `Claims` sheet/form/
-approval-queue infrastructure unchanged — just a new `type` value
-(`'company-service'`), exactly like `'special-fare'`/`'accommodation'`.
-
-**Status: ALL 3 tasks DONE, reviewed, committed, and verified live:**
-- Task 1 (`834c769`, `6a993ac`): `index.html`'s claim form has the new
-  dropdown option; Amount field is optional for this type only (normalizes
-  blank/NaN to `0`).
-- Task 2 (`2f972fc`): `Code.gs`'s `handleGetPeriodSheet` now checks for an
-  approved company-service claim on each date before calling
-  `buildAutoFareClaim`, skipping it entirely (and its OSRM network call) when
-  one exists — ANDed with the existing mother-branch check, not replacing it.
-- Task 3: live-verified end-to-end against the real deployment (submitted a
-  company-service claim for `Louwin celis` on `2026-06-13`, confirmed no
-  effect before approval, approved it using the `decision` field, confirmed
-  `auto_fare` became `0` after approval while
-   meal/accom/midnight/ot_hours stay unchanged).
-
-## Admin/product decisions confirmed during the build (don't re-ask if extending this app)
+## Admin/product decisions from earlier sessions (still valid, don't re-ask)
 
 1. **Round-trip fares**: IN→OUT GPS leg is one-way; fare is DOUBLED via
-   `buildAutoFareClaim`, reused (not duplicated) by `handleGetPeriodSheet`.
+   `buildAutoFareClaim`.
 2. **Fare rounding**: nearest peso (`Math.round`).
 3. **Fraud guard tolerance**: 20% (`Config.fraud_tolerance_pct`) — seeded but
    intentionally never gated on anywhere (pre-existing design gap, not a bug).
-4. **OT/UT rule**: continuous-hours math (no discrete half-day/minute buckets).
-5. **Accommodation trigger**: "destination ≠ mother branch" is sufficient,
-   no hours-worked threshold (unlike meal's 5-hour rule) — confirmed this is
-   intentional, not a bug, even when it produces accommodation on a
-   0-recorded-hours day (e.g. an orphan Log Out with no matching Log In).
-6. **Company Service fare suppression** (new, this session): suppresses
-   ONLY the auto-computed fare for that date, nothing else — see above.
+4. **Accommodation trigger**: "destination ≠ mother branch" is sufficient,
+   no hours-worked threshold (unlike meal's 5-hour rule).
+5. **Company Service fare suppression**: an approved `company-service`
+   claim suppresses ONLY that date's auto-computed fare, nothing else.
+6. **Per-employee rate model**: employee-specific `EmployeeRates` row always
+   wins over a department-fallback row for the same area.
 
 ## Known, accepted gaps (deliberate or pre-existing — not bugs to silently "fix" later without asking)
 
 - `employee_id` column in `Claims` is defined but never populated — keys off
   `name` instead everywhere. Harmless.
 - Base64 receipt photos in a `Claims` cell can exceed Sheets' ~50,000-char
-  limit for large images — documented inline (`c732921`), not fixed.
+  limit for large images — documented inline, not fixed.
 - `getRoadDistanceKm`'s OSRM-then-Haversine fallback swallows errors
   silently — no flagging if OSRM is down for an extended period.
 - `c.id` is deliberately left unescaped in one `onclick` attribute in
-  `admin.html`'s Claims table (server-generated, safe by construction —
-  escaping wouldn't actually help there anyway; see comment at `cb45870`).
-- `escapeHtml()` is used for employee-authored free text (`Claims.notes`,
-  attendance's free-typed `destination`/`branch`); admin-authored data
-  (`Users`, rate tables) renders unescaped in `loadUsers` — an intentional,
+  `admin.html`'s Claims table (server-generated, safe by construction).
+- `escapeHtml()` is used for employee-authored free text; admin-authored
+  data (`Users`, rate tables) renders unescaped — an intentional,
   not-retrofitted-everywhere distinction.
-- `sheetToObjects()` caches per-`doPost`-request (`ffffeed`) to avoid
-  redundant sheet reads in the period-sheet loop; cache resets at the top of
-  every `doPost` call.
+- `sheetToObjects()` caches per-`doPost`-request to avoid redundant sheet
+  reads; cache resets at the top of every `doPost` call.
 - Real attendance timestamps don't reliably zero-pad single-digit hours —
-  confirmed via live data (`"2026-06-19 3:19:44"`). Any future code that
-  sorts/compares timestamps must parse via `Date`, never raw string
-  comparison, or it WILL silently misorder things (this is exactly what
-  broke commit `906c7d0`'s first attempt, fixed in `42a208b`).
+  any code that sorts/compares timestamps must parse via `Date`, never raw
+  string comparison.
 - Google Sheets auto-converts date-looking text to real Date cells unless
-  you prefix with `'` — already done correctly for `Config.period_start`/
-  `period_end`, but worth remembering for any future date-valued cell.
+  you prefix with `'`.
+- `resolveAreaByGPS` has no maximum-distance cutoff (see GPS section above).
+- `Claims.employee_name` and the attendance CSV's `name` field are NOT
+  case-insensitive (only `EmployeeRates.employee_name` is, as of this
+  session) — same risk class, explicitly left unfixed pending a real
+  reported incident.
 
 ## Misc context
 
@@ -335,7 +281,16 @@ approval-queue infrastructure unchanged — just a new `type` value
   untracked/uncommitted, as always.
 - The live deployment's `SCRIPT_URL` (in `app.js`, uncommitted) and the
   Google Sheet itself are the user's real, private infrastructure — when
-  verifying things live, you (the assistant) have been calling the deployed
-  Web App directly via PowerShell `Invoke-WebRequest` POST requests with
-  JSON bodies matching `Code.gs`'s `doPost` action dispatch — this works and
-  is the established way to test without needing a browser.
+  verifying things live, calling the deployed Web App directly via
+  PowerShell `Invoke-WebRequest` POST requests with JSON bodies matching
+  `Code.gs`'s `doPost` action dispatch is the established way to test
+  without needing a browser.
+- This session's work was executed via `superpowers:subagent-driven-
+  development` (fresh implementer subagent per task, spec-compliance
+  review, then code-quality review, for every `Code.gs`/`admin.html`/
+  `app.js` change) — same pattern as prior sessions. Plans are saved at
+  `C:\Users\Gilbert\.claude\plans\cge-trace-mo-bka-elegant-boot.md` (note:
+  this is the harness's plan-mode scratch file, reused across this whole
+  session for three different sub-plans in sequence — not meant as a
+  permanent project doc, unlike the `docs/superpowers/plans/` files from
+  earlier sessions).
