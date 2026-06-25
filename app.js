@@ -73,7 +73,9 @@ function escapeHtml(str) {
 // Pure sheet -> HTML string function, shared by index.html (employee
 // self-service view) and admin.html (Period Sheets tab). Relies only on
 // escapeHtml() and formatCurrency() above.
-function renderPeriodSheet(sheet) {
+function renderPeriodSheet(sheet, opts) {
+  opts = opts || {};
+  var adminControls = !!opts.adminControls;
   var e = sheet.employee;
   var html = '<div id="printable-sheet">';
   html += '<div style="display:flex;justify-content:space-between;margin-bottom:12px;">';
@@ -87,6 +89,7 @@ function renderPeriodSheet(sheet) {
     '<th>DATE</th><th>BRANCH</th><th>IN</th><th>OUT</th><th>HRS</th>' +
     '<th>AUTO FARE</th><th>SPECIAL FARE</th><th>TOTAL FARE</th>' +
     '<th>MEAL</th><th>ACCOM</th><th>MIDNIGHT</th><th>TOTAL</th>' +
+    (adminControls ? '<th>MEAL CTRL</th>' : '') +
     '</tr></thead><tbody>';
   sheet.rows.forEach(function(r) {
     html += '<tr>' +
@@ -101,8 +104,22 @@ function renderPeriodSheet(sheet) {
       '<td>' + formatCurrency(r.meal) + '</td>' +
       '<td>' + formatCurrency(r.accom) + '</td>' +
       '<td>' + formatCurrency(r.midnight) + '</td>' +
-      '<td><b>' + formatCurrency(r.total_allowance) + '</b></td>' +
-      '</tr>';
+      '<td><b>' + formatCurrency(r.total_allowance) + '</b></td>';
+    if (adminControls) {
+      // Button must remain visible on a denied row (meal forced to 0 by
+      // the server) so the admin can reverse the denial — checking only
+      // `r.meal > 0` would make the button disappear the moment a row
+      // is denied. r.date is a plain 'YYYY-MM-DD' string (never
+      // employee-authored free text), but it's escaped anyway for the
+      // attribute value per this file's existing convention.
+      if (r.meal > 0 || r.meal_denied) {
+        html += '<td><button class="meal-deny-btn" data-date="' + escapeHtml(r.date) + '">' +
+          (r.meal_denied ? 'Allow Meal' : 'Deny Meal') + '</button></td>';
+      } else {
+        html += '<td></td>';
+      }
+    }
+    html += '</tr>';
   });
   // Totals row
   var t = sheet.totals;
@@ -115,6 +132,7 @@ function renderPeriodSheet(sheet) {
     '<td>' + formatCurrency(t.accom) + '</td>' +
     '<td>' + formatCurrency(t.midnight) + '</td>' +
     '<td>' + formatCurrency(t.total) + '</td>' +
+    (adminControls ? '<td></td>' : '') +
     '</tr>';
   html += '</tbody></table></div></div>';
   return html;
