@@ -329,10 +329,14 @@ function resolveAreaByGPS(lat, lng, candidateAreaNames) {
   return best;
 }
 
-function computeMeal(employeeName, department, destinationArea, hoursWorked, motherBranch, destination) {
-  // Rule: no meal at mother branch; 5+ hours required
+function computeMeal(employeeName, department, destinationArea, hoursWorked, motherBranch, destination, wasLogComplete) {
+  // Rule: no meal at mother branch. A genuinely incomplete log (missing
+  // Log In or Log Out, including a day nulled by the 20-hour sanity cap —
+  // see handleGetPeriodSheet's wasLogComplete computation) auto-grants
+  // the meal regardless of hoursWorked. A complete log still requires
+  // 5+ hours, unchanged from before.
   if (destination === motherBranch) return 0;
-  if (hoursWorked < 5) return 0;
+  if (wasLogComplete && hoursWorked < 5) return 0;
   var row = resolveEmployeeRate(employeeName, department, destinationArea);
   if (!row) return 0;
   return parseFloat(row['meal_amount'] || 0);
@@ -604,6 +608,18 @@ function handleGetPeriodSheet(payload) {
            c['type'] === 'company-service';
   });
 
+  // Admin meal-deny override (see docs/superpowers/specs/2026-06-25-
+  // meal-incomplete-log-auto-grant-design.md). Indexed by date key so
+  // the per-day loop below can do an O(1) lookup instead of re-filtering
+  // the whole sheet for every day in the period.
+  var mealDenials = sheetToObjects('MealDenials');
+  var deniedDates = {};
+  mealDenials.forEach(function(d) {
+    if (d['employee_name'] === payload.employee_name) {
+      deniedDates[claimDateKey(d['date'])] = true;
+    }
+  });
+
   var rows = [];
   var dates = Object.keys(dayMap).sort();
 
@@ -627,6 +643,11 @@ function handleGetPeriodSheet(payload) {
     }
 
     var hoursWorked = (firstIn && lastOut) ? (lastOut - firstIn) / 3600000 : 0;
+    // Computed from the already-capped firstIn/lastOut, not the raw
+    // day.in_record/day.out_record — this makes a 20-hour-cap-nulled day
+    // (lastOut forced null above) count as incomplete for meal purposes,
+    // exactly like a day with no Log Out at all.
+    var wasLogComplete = !!(firstIn && lastOut);
     var destination = day.destination || '';
 
     // Map destination name to area (destination in attendance app may be a branch
@@ -653,7 +674,9 @@ function handleGetPeriodSheet(payload) {
     }
 
     var meal     = computeMeal(payload.employee_name, emp['department'], destinationArea,
-                               hoursWorked, emp['mother_branch'], destination);
+                               hoursWorked, emp['mother_branch'], destination, wasLogComplete);
+    var mealDenied = !!deniedDates[date];
+    if (mealDenied) meal = 0;
     var accom    = computeAccom(payload.employee_name, emp['department'], destinationArea,
                                 emp['mother_branch'], destination);
     var midnight = computeMidnight(lastOut);
@@ -691,6 +714,7 @@ function handleGetPeriodSheet(payload) {
       special_fare: specialFare,
       total_fare:   autoFare + specialFare,
       meal:         meal,
+      meal_denied:  mealDenied,
       accom:        accom + specialAccom,
       midnight:     midnight,
       total_allowance: (autoFare + specialFare) + meal + (accom + specialAccom) + midnight
