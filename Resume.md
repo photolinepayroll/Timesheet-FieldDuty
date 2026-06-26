@@ -3,100 +3,39 @@
 > Read this first if picking this project back up in a new session/after a
 > context reset.
 
-## STOP HERE FIRST: in-progress design as of this save — meal-allowance incomplete-log auto-grant + admin deny override
+## STOP HERE FIRST: one open data issue — Jude Patani's `EmployeeRates` rows don't match his real attendance name
 
-**Session continued past the previous "no open work" checkpoint below.** A
-new feature is mid-brainstorm (design proposed, NOT yet formally approved by
-the user via a written spec — they said "save in resume.md" right after
-seeing the proposed design, before an explicit final confirmation). **Do
-NOT start implementing until the design doc is written and the user
-confirms it** (per `superpowers:brainstorming`'s hard gate).
+**Not a code bug — a data mismatch, confirmed live, not yet fixed.** While
+investigating why meal allowance "wasn't working" for the admin (turned out
+to be real, unrelated data issues, not the GPS-fallback feature, which was
+already working correctly), this was found:
 
-**The problem:** `computeMeal()` requires `hoursWorked >= 5`, computed as
-`(lastOut - firstIn) / 3600000`. This is `0` (and thus blocks meal) in TWO
-different situations that the user wants treated differently:
-1. Log is genuinely incomplete — only a Log In OR only a Log Out exists for
-   that day (employee forgot to log the other side, or the GPS app failed).
-2. Log is complete (both Log In and Log Out exist) but the visit was
-   legitimately short (e.g. 1.1 hours) — the 5-hour rule SHOULD still apply
-   here, this is not a target of the new feature.
-
-**Decisions confirmed with the user so far (don't re-ask):**
-- For case 1 (genuinely incomplete log) only: auto-grant meal regardless of
-  the 5-hour computation, as long as `destination !== mother_branch`. Case
-  2 (complete log, short visit) keeps the existing 5-hour rule unchanged —
-  this distinction was explicitly confirmed, not assumed.
-- A day capped by the existing 20-hour sanity-cap fix (`Code.gs`, commit
-  `7d63294f`) — which nulls `lastOut` to treat the day as incomplete — will
-  ALSO qualify for the auto-grant under this new rule, since the cap
-  already treats it identically to "no Log Out at all." Not yet explicitly
-  re-confirmed with the user after this implication was pointed out, but
-  flagged as a natural consequence of the cap's existing design.
-- Admin needs a manual override: a "Deny meal" / "Allow meal" toggle button
-  in `admin.html`'s Period Sheet view, on EVERY row with `meal > 0` (not
-  just incomplete-log days — admin should be able to deny any meal,
-  confirmed explicitly).
-- The toggle must be reversible (deny, then allow again) — not a one-way
-  action.
-- Accommodation is explicitly UNAFFECTED by any of this — no rule change
-  there (it already has no hours threshold, only the mother-branch check).
-
-**Proposed architecture (presented to user, awaiting final spec
-confirmation):**
-- New `MealDenials` Sheet tab: `employee_name | date | denied_by |
-  denied_at`. One row = one denied day. Toggling adds/removes a row.
-  Consistent with this project's established "business-tunable data lives
-  in a Sheet, not in code" pattern (`MidnightRates`/`LTFRBRates`/
-  `EmployeeRates`/`AreaCenters` precedent).
-- `Code.gs`: `handleGetPeriodSheet` needs to track whether a day's log was
-  "genuinely complete" (`day.in_record && day.out_record`, captured BEFORE
-  the 20-hour cap potentially nulls `lastOut` — the cap's nulling must not
-  be confused with genuine incompleteness when deciding whether to apply
-  the new auto-grant vs. the old 5-hour rule). Pass this as a new parameter
-  to `computeMeal`. After computing `meal`, check `MealDenials` for
-  `(employee_name, date)` and force to `0` if a denial row exists.
-- New `doPost` action `toggleMealDenial`.
-- `admin.html`: new button per period-sheet row, calls the new action, then
-  re-renders.
-
-**Next action on resume:** finish the brainstorming flow — write the
-design doc to `docs/superpowers/specs/<date>-meal-incomplete-log-auto-grant-
-design.md`, get explicit user confirmation on the doc (not just the verbal
-design summary above), then invoke `superpowers:writing-plans` to produce
-an implementation plan, then `superpowers:subagent-driven-development` to
-execute task-by-task (same pattern as every other `Code.gs` change this
-session — fresh implementer subagent, spec-compliance review, then
-code-quality review, for each task).
-
-**Also fixed today, while investigating why meal allowance "wasn't
-working" for the admin (turned out to be real, unrelated data bugs, not
-the GPS-fallback feature, which was already working correctly):**
-- A new `Users` row was added for an employee with two typos: name `"jude H
-  patani"` mistyped once as `"Jude Patani"` (which broke attendance
-  lookup — `handleGetAttendance`'s name filter is exact/case-sensitive, and
-  the real attendance app logs him as `"jude H patani"` literally, with the
-  middle initial) — reverted back. Department `"Techinical"` → corrected to
+- The real attendance app logs this employee as `"jude H patani"` literally
+  (with middle initial). A `Users` row was briefly added with the WRONG name
+  `"Jude Patani"` (no middle initial), which broke attendance lookup
+  (`handleGetAttendance`'s name filter is exact/case-sensitive) — reverted
+  back to `"jude H patani"`. Department `"Techinical"` → corrected to
   `"Technical"` (this one was a genuine typo, kept fixed).
-- **`Users.name` must always exactly match the literal string the
-  attendance app logs** (case-sensitive, no normalization anywhere in the
-  pipeline) — do not "clean up" a `Users.name` spelling without first
-  checking what the attendance CSV actually has for that person via
-  `getAttendance`, or you will silently break their period sheet (zero
-  rows, no error).
-- `EmployeeRates.employee_name` matching IS case-insensitive (this
-  session's earlier fix, commit `4ebc0d0`) but still needs the literal text
-  (modulo case) to match `Users.name` exactly — a middle initial or other
-  literal difference still won't match even with the case-insensitive
-  helper. If `Jude Patani`'s 14 `EmployeeRates` rows still say `"JUDE
-  PATANI"` (no middle initial) as of this save, they need updating to
-  `"jude H patani"` to actually match him — check this was done before
-  trusting his rates work.
+- **Confirmed via live `getRates` check (2026-06-26): his 14 `EmployeeRates`
+  rows still say `"JUDE PATANI"`** (no middle initial). Since
+  `EmployeeRates.employee_name` matching is case-insensitive (commit
+  `4ebc0d0`) but NOT typo/format-insensitive, `"JUDE PATANI"` still does not
+  match `"jude H patani"` — his employee-specific rates have never actually
+  applied. **Needs a manual fix: update all 14 rows' `employee_name` from
+  `"JUDE PATANI"` to `"jude H patani"`** (exact text, case doesn't matter,
+  but the middle initial does) before trusting his rates.
+- **General rule confirmed this session: `Users.name` must always exactly
+  match the literal string the attendance app logs** (case-sensitive, no
+  normalization anywhere in the pipeline) — do not "clean up" a
+  `Users.name` spelling without first checking what the attendance CSV
+  actually has for that person via `getAttendance`, or you will silently
+  break their period sheet (zero rows, no error).
 
 ---
 
-## Status: app is live, expense-only (OT/UT removed), GPS-fallback area classification shipped, real per-employee rate data imported. Three workstreams below are DONE; see "STOP HERE FIRST" above for what's in progress on top of this.
+## Status: app is live, expense-only (OT/UT removed), GPS-fallback area classification shipped, real per-employee rate data imported, meal-allowance incomplete-log auto-grant + admin deny override shipped. Four workstreams below are DONE.
 
-This session did three big things, all shipped, reviewed, redeployed, and
+This session did four big things, all shipped, reviewed, redeployed, and
 live-verified:
 
 1. **Removed OT/UT/Offset entirely** — the app is now expense-only (fare,
@@ -111,6 +50,9 @@ live-verified:
    ComTech department row), and fixed a real, previously-invisible bug where
    employee-specific `EmployeeRates` rows silently never matched due to a
    casing mismatch against `Users.name`.
+4. **Shipped meal-allowance auto-grant for incomplete attendance logs**,
+   plus an admin "Deny Meal"/"Allow Meal" override toggle in the Period
+   Sheet view.
 
 ---
 
@@ -199,6 +141,15 @@ matches; GPS is a fallback, never an override):**
   `"VIZ/MIN AREA"` (spans Visayas AND Mindanao).
 - `AreaCenters` row-name typos fail silently (no validation) — same
   no-validation-lookup convention as the rest of this codebase.
+- GPS fallback only ever looks at `day.in_record` (the day's first Log In)
+  — confirmed this session: a day with ONLY an orphan Log Out (no Log In at
+  all, e.g. employee "Emmerson" on 2026-06-19, destination `"SM TRECE"`)
+  cannot be GPS-classified even though that Log Out itself carries valid
+  GPS coordinates. `destinationArea` stays as the raw, unmatched destination
+  string, and `meal` stays `0` purely because no `EmployeeRates` row exists
+  for that literal string. Not a bug — consistent with the original design
+  decision to use only the day's first Log In — but worth knowing this is a
+  real, currently-occurring case, not just a hypothetical edge case.
 
 ---
 
@@ -251,9 +202,89 @@ convention doesn't introduce a new mismatch with how that name appears in
 
 ---
 
+## 4. Meal-allowance incomplete-log auto-grant + admin deny override
+
+**Why:** `computeMeal()` required `hoursWorked >= 5`, but `hoursWorked`
+comes out `0` in two different situations: (1) a genuinely incomplete
+attendance log (missing Log In or Log Out — including a day nulled by the
+20-hour sanity cap from workstream 1), or (2) a complete log with a
+legitimately short visit (e.g. 1.1 hours). Only case 1 should auto-grant
+meal; case 2 must keep the existing 5-hour rule.
+
+**Design:** `docs/superpowers/specs/2026-06-26-meal-incomplete-log-auto-grant-design.md`.
+**Plan:** `docs/superpowers/plans/2026-06-26-meal-incomplete-log-auto-grant.md`.
+
+**What shipped:**
+- `Code.gs`: `computeMeal()` gained a `wasLogComplete` parameter — the
+  5-hour check now only applies `if (wasLogComplete && hoursWorked < 5)`.
+  `wasLogComplete = !!(firstIn && lastOut)`, computed from the
+  ALREADY-capped `firstIn`/`lastOut` (after the 20-hour cap may have
+  nulled `lastOut`) — so a capped day naturally counts as incomplete too,
+  no separate cap-awareness logic needed. Commit `c019aa6`.
+- New `MealDenials` Sheet tab (`employee_name | date | denied_by |
+  denied_at`) — one row = one denied day, written/deleted only by the app,
+  never hand-edited. Schema documented in `SETUP.md`, commit `8e96a00`.
+- New `toggleMealDenial` doPost action — idempotent toggle, deletes the row
+  if found (un-deny), appends one if not (deny). `employee_name` matching
+  here is intentionally case-SENSITIVE (unlike `EmployeeRates`) since this
+  tab is written by the app from an already-resolved name, never
+  hand-typed. Commit `8cb2118`.
+- `app.js`'s shared `renderPeriodSheet(sheet, opts)` gained an opt-in
+  `opts.adminControls` flag — when true, renders a `MEAL CTRL` column with
+  a `Deny Meal`/`Allow Meal` button (class `meal-deny-btn`) on every row
+  where `meal > 0` OR `meal_denied` is true (so the button stays visible
+  to reverse a denial even after `meal` is forced to `0`). Commit `2fa5054`.
+- `admin.html`: turned on `{ adminControls: true }` in `generatePeriodSheet()`'s
+  `renderPeriodSheet` call, and added a click handler (event-delegated on
+  `#period-sheet-output`, attached once inside the existing
+  `DOMContentLoaded` callback) that calls `toggleMealDenial` then
+  re-generates the sheet. Uses `currentUser().name` for `denied_by`, same
+  pattern as `approveReject()`. Commits `49c23d2`, `746f08f`.
+- `MealDenials` tab created live, `Code.gs` redeployed, `admin.html`
+  reloaded. **Live-verified end-to-end**: incomplete-log days (no Log In or
+  no Log Out) that previously showed `meal: 0` now correctly auto-grant
+  (confirmed for employee "Emmerson" on 2026-06-06, 06-13, 06-20); a
+  complete-log short-visit day (06-15, 1.1 hours) correctly stayed at
+  `meal: 0`, unaffected; the deny/allow toggle round-trips correctly
+  (`toggleMealDenial` → `meal: 0` → toggle again → `meal` returns to its
+  auto-granted amount); confirmed in the `admin.html` browser UI too (MEAL
+  CTRL column with working buttons).
+
+**Note on this section's history:** most of this feature (the `Code.gs`/
+`app.js`/`SETUP.md` pieces) was actually built and committed in an earlier,
+interrupted session — that session got cut off before finishing
+`admin.html`'s wiring, redeploying, or live-verifying, leaving this file's
+"STOP HERE FIRST" section stuck describing it as "mid-brainstorm, not yet
+approved" even though the design had already been implemented. This
+session picked up from there: confirmed the design (it matched what had
+already been built almost exactly), wrote the formal spec/plan docs to
+match, found and fixed the one missing piece (`admin.html` wiring), then
+redeployed and finished verification. **Lesson: when `Resume.md` says a
+feature is "in progress," always check `git log` for matching commits
+before assuming nothing was built yet** — this file can go stale if a
+session gets interrupted mid-task.
+
+**Known limitation carried over from workstream 2:** a day with ONLY an
+orphan Log Out (no Log In at all — e.g. Emmerson's 2026-06-19) still can't
+get an auto-granted meal even though `wasLogComplete` is correctly `false`
+for it, because area resolution (substring + GPS fallback) needs
+`day.in_record` to run the GPS fallback at all, and without it
+`destinationArea` stays as the raw, unmatched destination string with no
+`EmployeeRates` row. Not introduced by this feature — pre-existing GPS
+fallback limitation, just newly visible because this feature removed the
+5-hour rule that used to mask it on these specific days.
+
+---
+
 ## Full commit log (newest first, this session's additions on top)
 
 ```
+746f08f fix: move meal-deny click handler inside DOMContentLoaded for consistency
+49c23d2 feat: wire admin Period Sheet UI to meal-deny toggle
+2fa5054 feat: add opt-in admin Allow/Deny meal column to renderPeriodSheet
+8cb2118 feat: add toggleMealDenial doPost action
+c019aa6 feat: auto-grant meal on incomplete logs, apply admin deny override
+8e96a00 docs: document MealDenials schema for meal auto-grant + admin override
 4ebc0d0 fix: case-insensitive employee_name matching in EmployeeRates lookups
 78c26f1 feat: GPS-distance fallback for area classification when substring match fails
 ba68f83 feat: extract straight-line Haversine helper, add GPS-based area resolver
@@ -272,8 +303,9 @@ d150af2 feat: remove OT/UT/Offset computation, descope app to expense-only
 ## What's deployed right now
 
 - **Live Google Sheet**, tabs: `Users` (no `ot_type` column anymore),
-  `EmployeeRates` (179 rows, real company data), `AreaCenters` (new, 8
-  rows), `MidnightRates`, `LTFRBRates`, `Claims`, `Config`, `RawRateImport`
+  `EmployeeRates` (179 rows, real company data), `AreaCenters` (8 rows),
+  `MealDenials` (new this session, empty until admin uses the toggle),
+  `MidnightRates`, `LTFRBRates`, `Claims`, `Config`, `RawRateImport`
   (scratch staging, reused each bulk-import — admin's call whether to keep
   as audit trail).
 - **Live Apps Script Web App**, deployed and reachable, redeployed multiple
@@ -284,7 +316,10 @@ d150af2 feat: remove OT/UT/Offset computation, descope app to expense-only
 - **Real Users**: `Louwin celis` (department Technical, real attendance,
   fully live-tested), `Emmerson` (department HR, real attendance,
   live-tested this session), `Admin`/`Test Head` (role `head`, for admin
-  testing).
+  testing). `"jude H patani"` (department Technical, real attendance) also
+  exists in `Users` with the correct literal name — but his 14
+  `EmployeeRates` rows still say `"JUDE PATANI"` (see "STOP HERE FIRST"
+  above), so his rates are not yet actually working.
 - **EmployeeRates**: real company data for 15 Area Heads (PDF7-style
   roster), 6 more individually-named employees, Crispin Casil (no live
   Users account — rates exist but dormant until/unless he's added),
@@ -321,6 +356,18 @@ d150af2 feat: remove OT/UT/Offset computation, descope app to expense-only
    matching against `Claims`/attendance-CSV names is explicitly still
    case-sensitive (flagged as same-risk but out of scope, no live incident
    reported there yet).
+10. **Meal auto-grants only on genuinely incomplete logs**, not on
+    complete-but-short visits — this distinction is the whole point of
+    workstream 4, confirmed explicitly, not assumed.
+11. **A 20-hour-capped day also qualifies for the meal auto-grant** —
+    confirmed explicitly when this implication was raised (it falls out
+    naturally from how `wasLogComplete` is computed, no extra logic needed).
+12. **Admin's "Deny Meal" toggle is available on every row with `meal > 0`**,
+    not just incomplete-log rows — admin can deny any meal, confirmed
+    explicitly. Reversible (deny, then allow again).
+13. **`MealDenials.employee_name` matching is case-SENSITIVE**, unlike
+    `EmployeeRates` — deliberate, since this tab is written by the app from
+    an already-resolved name, never hand-typed from an external source.
 
 ## Admin/product decisions from earlier sessions (still valid, don't re-ask)
 
