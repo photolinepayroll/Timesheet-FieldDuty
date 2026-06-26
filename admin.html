@@ -127,6 +127,19 @@
       if (!user) return;
       loadUsers();
       initTabs();
+      document.getElementById('period-sheet-output').addEventListener('click', function(ev) {
+        var btn = ev.target.closest('.meal-deny-btn');
+        if (!btn) return;
+        var u = currentUser();
+        api('toggleMealDenial', {
+          employee_name: window._lastPeriodSheet.employee.name,
+          date: btn.dataset.date,
+          denied_by: u.name
+        }, function(err) {
+          if (err) { alert(err.message); return; }
+          generatePeriodSheet(); // re-fetch and re-render to reflect the new state
+        });
+      });
     });
 
     function initTabs() {
@@ -563,20 +576,6 @@
         }
       );
     }
-
-    document.getElementById('period-sheet-output').addEventListener('click', function(ev) {
-      var btn = ev.target.closest('.meal-deny-btn');
-      if (!btn) return;
-      var user = currentUser();
-      api('toggleMealDenial', {
-        employee_name: window._lastPeriodSheet.employee.name,
-        date: btn.dataset.date,
-        denied_by: user.name
-      }, function(err) {
-        if (err) { alert(err.message); return; }
-        generatePeriodSheet(); // re-fetch and re-render to reflect the new state
-      });
-    });
 
     function printPeriodSheet() {
       var content = document.getElementById('printable-sheet');
