@@ -33,10 +33,9 @@ already working correctly), this was found:
 
 ---
 
-## Status: app is live, expense-only (OT/UT removed), GPS-fallback area classification shipped, real per-employee rate data imported, meal-allowance incomplete-log auto-grant + admin deny override shipped. Four workstreams below are DONE.
+## Status: app is live, expense-only (OT/UT removed), GPS-fallback area classification shipped, real per-employee rate data imported, meal-allowance incomplete-log auto-grant + admin deny override shipped, employee 3-tab self-service dashboard shipped. Six workstreams below are DONE.
 
-This session did four big things, all shipped, reviewed, redeployed, and
-live-verified:
+Six big things shipped, all committed:
 
 1. **Removed OT/UT/Offset entirely** — the app is now expense-only (fare,
    meal, accommodation, midnight allowance). Also fixed a real live bug
@@ -53,6 +52,24 @@ live-verified:
 4. **Shipped meal-allowance auto-grant for incomplete attendance logs**,
    plus an admin "Deny Meal"/"Allow Meal" override toggle in the Period
    Sheet view.
+5. **Employee 3-tab self-service dashboard** — `index.html` rebuilt as a
+   proper dashboard with My Sheet / My Claims / Attendance tabs. Each
+   employee can see their period sheet with FROM/TO/MODE columns per row
+   (populated from `claim_details`), all their submitted claims with status
+   badges, and their raw attendance log with GPS per day. Per-row `+ Fare` /
+   `+ Accom` buttons open an inline claim form. `Code.gs`'s
+   `handleGetPeriodSheet` gained a `claim_details` field per row (Approved +
+   Submitted special-fare/accommodation claims), and `app.js`'s
+   `renderPeriodSheet` gained an `employeeControls` opt that switches the
+   column layout. Commits `9a24921`.
+6. **Lazy load — manual date range, no auto-fetch on login** — the app was
+   hanging on login because `loadEmployeePeriodSheet` fired automatically,
+   downloading the entire attendance CSV before the employee did anything.
+   Fix: date-range inputs (pre-filled from Config) + a "Load" button above
+   the tab bar; nothing fetches until the employee clicks Load. `switchTab`
+   no longer auto-fetches on tab switch; `loadEmployeeConfig` only pre-fills
+   the inputs; new `loadCurrentTab()` dispatches to the active tab's loader.
+   Commit `f32d5ea`.
 
 ---
 
@@ -279,6 +296,9 @@ fallback limitation, just newly visible because this feature removed the
 ## Full commit log (newest first, this session's additions on top)
 
 ```
+f32d5ea fix: manual date range entry + lazy load to prevent hang on login
+9a24921 feat: employee 3-tab dashboard — My Sheet, My Claims, Attendance
+0bf8365 docs: update Resume.md — meal incomplete-log auto-grant shipped, flag Jude Patani EmployeeRates name mismatch
 746f08f fix: move meal-deny click handler inside DOMContentLoaded for consistency
 49c23d2 feat: wire admin Period Sheet UI to meal-deny toggle
 2fa5054 feat: add opt-in admin Allow/Deny meal column to renderPeriodSheet
@@ -308,11 +328,15 @@ d150af2 feat: remove OT/UT/Offset computation, descope app to expense-only
   `MidnightRates`, `LTFRBRates`, `Claims`, `Config`, `RawRateImport`
   (scratch staging, reused each bulk-import — admin's call whether to keep
   as audit trail).
-- **Live Apps Script Web App**, deployed and reachable, redeployed multiple
-  times this session with all changes above. `app.js`'s `SCRIPT_URL` has the
+- **Live Apps Script Web App** — `Code.gs` changes from workstream 5
+  (`claim_details` per row in `handleGetPeriodSheet`) have been committed
+  locally but **need to be redeployed** (paste current `Code.gs` into the
+  Apps Script editor → Deploy → Manage deployments → New version → Deploy,
+  same URL as always) before `index.html`'s My Sheet tab will show
+  FROM/TO/MODE columns with real data. `app.js`'s `SCRIPT_URL` has the
   real deployment URL — **this is an UNSTAGED, UNCOMMITTED local change**
-  (deliberately left out of git, it's a private URL — see the incident
-  note above if this ever looks "modified" in git status, that's correct).
+  (deliberately left out of git — `git status` showing `app.js` modified
+  is expected and correct, do not commit it).
 - **Real Users**: `Louwin celis` (department Technical, real attendance,
   fully live-tested), `Emmerson` (department HR, real attendance,
   live-tested this session), `Admin`/`Test Head` (role `head`, for admin
