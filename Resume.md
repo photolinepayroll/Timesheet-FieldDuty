@@ -333,10 +333,16 @@ d150af2 feat: remove OT/UT/Offset computation, descope app to expense-only
   locally but **need to be redeployed** (paste current `Code.gs` into the
   Apps Script editor → Deploy → Manage deployments → New version → Deploy,
   same URL as always) before `index.html`'s My Sheet tab will show
-  FROM/TO/MODE columns with real data. `app.js`'s `SCRIPT_URL` has the
-  real deployment URL — **this is an UNSTAGED, UNCOMMITTED local change**
-  (deliberately left out of git — `git status` showing `app.js` modified
-  is expected and correct, do not commit it).
+  FROM/TO/MODE columns with real data. `app.js`'s `SCRIPT_URL` is now
+  **committed to git** (real URL in the repo) to enable GitHub Pages hosting
+  — this is a change from prior convention where it was kept uncommitted.
+- **GitHub Pages** — repo pushed to `github.com/photolinepayroll/Timesheet-FieldDuty`
+  (public), GitHub Pages enabled on `main` branch. Live URL:
+  `https://photolinepayroll.github.io/Timesheet-FieldDuty/` (may still be
+  deploying on first run — check Actions tab for status). Future pushes to
+  `main` redeploy automatically within ~1 minute. Push pattern: always push
+  to both `master` AND `main` (`git push` for master, `git push origin master:main`
+  for main), or set master's upstream to main.
 - **Real Users**: `Louwin celis` (department Technical, real attendance,
   fully live-tested), `Emmerson` (department HR, real attendance,
   live-tested this session), `Admin`/`Test Head` (role `head`, for admin
