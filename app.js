@@ -1,6 +1,6 @@
 // app.js — shared by index.html and admin.html
 
-var SCRIPT_URL = 'PASTE_YOUR_DEPLOYMENT_URL_HERE';
+var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1nwaPJuGeqYQOFu9Jwre5AzgnPMkJp8wWdSwgi-U9YTCiB_ZvAJ6juoGSv3JfwmKxKQ/exec';
 
 // ---- API ----
 function api(action, params, cb) {
