@@ -36,6 +36,14 @@
       <button onclick="logout()">Logout</button>
     </div>
 
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+      <label style="font-weight:600;">Period:</label>
+      <input id="inp-period-start" type="date" style="padding:6px;">
+      <span>—</span>
+      <input id="inp-period-end" type="date" style="padding:6px;">
+      <button onclick="loadCurrentTab()" style="padding:6px 16px;">Load</button>
+    </div>
+
     <div class="emp-tabs">
       <button class="emp-tab active" id="tab-btn-sheet"      onclick="switchTab('sheet')">My Sheet</button>
       <button class="emp-tab"        id="tab-btn-claims"     onclick="switchTab('claims')">My Claims</button>
@@ -44,7 +52,7 @@
 
     <!-- Tab 1: My Sheet -->
     <div id="tab-sheet">
-      <div id="emp-period-sheet"><p>Loading your period sheet…</p></div>
+      <div id="emp-period-sheet"><p style="color:#888;">Select a date range above and click Load.</p></div>
 
       <!-- Inline claim form — revealed when employee clicks + Fare / + Accom -->
       <div id="emp-inline-claim" class="card" style="max-width:500px;margin-top:18px;">
@@ -82,12 +90,12 @@
 
     <!-- Tab 2: My Claims -->
     <div id="tab-claims" style="display:none;">
-      <div id="emp-claims-list"><p>Loading your claims…</p></div>
+      <div id="emp-claims-list"><p style="color:#888;">Select a date range above and click Load.</p></div>
     </div>
 
     <!-- Tab 3: Attendance -->
     <div id="tab-attendance" style="display:none;">
-      <div id="emp-attendance-list"><p>Loading attendance…</p></div>
+      <div id="emp-attendance-list"><p style="color:#888;">Select a date range above and click Load.</p></div>
     </div>
   </div>
 
@@ -125,10 +133,24 @@
         document.getElementById('tab-' + t).style.display = (t === tab) ? 'block' : 'none';
         document.getElementById('tab-btn-' + t).classList.toggle('active', t === tab);
       });
-      var user = currentUser();
-      var cfg  = getStoredConfig();
-      if (tab === 'claims')     loadMyClaims(user);
-      if (tab === 'attendance') loadAttendance(user, cfg);
+      // No auto-load on tab switch — employee must press Load to fetch data.
+    }
+
+    // ---- Load on demand ----
+    function loadCurrentTab() {
+      var user  = currentUser();
+      var start = document.getElementById('inp-period-start').value;
+      var end   = document.getElementById('inp-period-end').value;
+      if (!start || !end) { alert('Please select a date range first.'); return; }
+      // Keep _plConfig in sync so saveClaim uses the selected range
+      if (!window._plConfig) window._plConfig = {};
+      window._plConfig.period_start = start;
+      window._plConfig.period_end   = end;
+      var active = document.querySelector('.emp-tab.active');
+      var tabId  = active ? active.id.replace('tab-btn-', '') : 'sheet';
+      if (tabId === 'sheet')      loadEmployeePeriodSheet(user, { period_start: start, period_end: end });
+      if (tabId === 'claims')     loadMyClaims(user);
+      if (tabId === 'attendance') loadAttendance(user, { period_start: start, period_end: end });
     }
 
     // ---- Inline claim form ----
@@ -236,12 +258,11 @@
         if (err) return;
         window._plConfig = {};
         data.forEach(function(row) { window._plConfig[row.key] = row.value; });
-        // Heads are redirected to admin.html immediately after login and never
-        // see this page's content, so loading/rendering their period sheet
-        // here would be wasted work that's about to be thrown away.
-        if (user && user.role !== 'head') {
-          loadEmployeePeriodSheet(user, window._plConfig);
-        }
+        // Pre-fill date inputs from Config period dates so the employee
+        // can press Load immediately without typing — but do NOT auto-load
+        // any data; the employee presses the Load button when ready.
+        document.getElementById('inp-period-start').value = window._plConfig.period_start || '';
+        document.getElementById('inp-period-end').value   = window._plConfig.period_end   || '';
       });
     }
 
