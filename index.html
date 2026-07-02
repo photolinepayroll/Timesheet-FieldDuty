@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Photoline Expense</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    .emp-tabs { display:flex; gap:6px; margin-bottom:18px; flex-wrap:wrap; }
+    .emp-tab  { padding:8px 20px; border:1.5px solid var(--blue2,#1a73e8); border-radius:4px;
+                background:#fff; cursor:pointer; font-weight:600; color:var(--blue2,#1a73e8); }
+    .emp-tab.active { background:var(--blue2,#1a73e8); color:#fff; }
+    .claim-status-badge { padding:2px 10px; border-radius:12px; font-size:.82em; font-weight:600; display:inline-block; }
+    .claim-status-approved  { background:#d4f7d4; color:#1a6e1a; }
+    .claim-status-submitted { background:#fff3cd; color:#7a5a00; }
+    .claim-status-rejected  { background:#ffd6d6; color:#8b0000; }
+    #emp-inline-claim { display:none; }
+    .emp-claim-btn { font-size:.78em; padding:3px 9px; cursor:pointer; }
+    #cl-date[readonly] { background:#f0f0f0; opacity:.85; }
+  </style>
 </head>
 <body>
   <div id="login-view" class="card" style="max-width:360px;margin:60px auto;">
@@ -17,80 +30,155 @@
     <p id="login-error" style="color:red;text-align:center;margin-top:8px;"></p>
   </div>
 
-  <div id="employee-view" style="display:none;max-width:900px;margin:24px auto;padding:16px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;">
+  <div id="employee-view" style="display:none;max-width:980px;margin:24px auto;padding:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
       <h3 id="welcome-msg"></h3>
       <button onclick="logout()">Logout</button>
     </div>
 
-    <div class="section-title">Submit Special Trip / Accommodation Claim</div>
-    <div class="card" style="max-width:500px;">
-      <label>Date of Trip</label>
-      <input id="cl-date" type="date" style="width:100%;padding:7px;margin:4px 0 10px;">
-      <label>Type</label>
-      <select id="cl-type" style="width:100%;padding:7px;margin:4px 0 10px;">
-        <option value="special-fare">Special Trip / Special Pay</option>
-        <option value="accommodation">Accommodation</option>
-        <option value="company-service">Company Service (No Fare)</option>
-      </select>
-      <label>From</label>
-      <input id="cl-from" type="text" placeholder="Starting point" style="width:100%;padding:7px;margin:4px 0 10px;">
-      <label>To</label>
-      <input id="cl-to" type="text" placeholder="Destination" style="width:100%;padding:7px;margin:4px 0 10px;">
-      <label>Vehicle / Mode (for special trip)</label>
-      <input id="cl-mode" type="text" placeholder="e.g. Van hire, Taxi, Grab" style="width:100%;padding:7px;margin:4px 0 10px;">
-      <label>Amount (₱)</label>
-      <input id="cl-amount" type="number" min="0" style="width:100%;padding:7px;margin:4px 0 10px;">
-      <label>Notes / Justification</label>
-      <textarea id="cl-notes" rows="3" style="width:100%;padding:7px;margin:4px 0 10px;"></textarea>
-      <label>Receipt Photo (optional but recommended)</label>
-      <input id="cl-receipt" type="file" accept="image/*" capture="environment" style="margin:4px 0 10px;">
-      <button onclick="submitClaim()">
-        Submit Claim
-      </button>
-      <p id="cl-msg" style="margin-top:8px;color:green;"></p>
+    <div class="emp-tabs">
+      <button class="emp-tab active" id="tab-btn-sheet"      onclick="switchTab('sheet')">My Sheet</button>
+      <button class="emp-tab"        id="tab-btn-claims"     onclick="switchTab('claims')">My Claims</button>
+      <button class="emp-tab"        id="tab-btn-attendance" onclick="switchTab('attendance')">Attendance</button>
     </div>
 
-    <div class="section-title">Your Period Sheet</div>
-    <div id="emp-period-sheet"></div>
+    <!-- Tab 1: My Sheet -->
+    <div id="tab-sheet">
+      <div id="emp-period-sheet"><p>Loading your period sheet…</p></div>
+
+      <!-- Inline claim form — revealed when employee clicks + Fare / + Accom -->
+      <div id="emp-inline-claim" class="card" style="max-width:500px;margin-top:18px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <b id="cl-form-title">Submit Claim</b>
+          <button onclick="hideClaimForm()" style="background:none;border:none;font-size:1.3em;cursor:pointer;line-height:1;">✕</button>
+        </div>
+        <label>Date</label>
+        <input id="cl-date" type="date" style="width:100%;padding:7px;margin:4px 0 10px;">
+        <input id="cl-type" type="hidden">
+        <div id="cl-fare-fields">
+          <label>From</label>
+          <input id="cl-from" type="text" placeholder="Starting point" style="width:100%;padding:7px;margin:4px 0 10px;">
+          <label>To</label>
+          <input id="cl-to" type="text" placeholder="Destination" style="width:100%;padding:7px;margin:4px 0 10px;">
+          <label>Vehicle / Mode</label>
+          <input id="cl-mode" type="text" placeholder="e.g. Van hire, Taxi, Grab" style="width:100%;padding:7px;margin:4px 0 10px;">
+        </div>
+        <label>Amount (₱)</label>
+        <input id="cl-amount" type="number" min="0" style="width:100%;padding:7px;margin:4px 0 10px;">
+        <label>Notes / Justification</label>
+        <textarea id="cl-notes" rows="2" style="width:100%;padding:7px;margin:4px 0 10px;"></textarea>
+        <label>Receipt Photo (optional)</label>
+        <input id="cl-receipt" type="file" accept="image/*" capture="environment" style="margin:4px 0 12px;">
+        <button onclick="submitClaim()" style="width:100%;">Submit Claim</button>
+        <p id="cl-msg" style="margin-top:8px;color:green;"></p>
+      </div>
+
+      <!-- Fallback: for trips with no matching attendance row in the period -->
+      <div style="margin-top:20px;">
+        <button onclick="openClaimForm('','special-fare')" style="font-size:.85em;">+ Add Claim for Another Day</button>
+        <span style="margin-left:10px;font-size:.82em;color:#666;">Use for trips not listed in the sheet above</span>
+      </div>
+    </div>
+
+    <!-- Tab 2: My Claims -->
+    <div id="tab-claims" style="display:none;">
+      <div id="emp-claims-list"><p>Loading your claims…</p></div>
+    </div>
+
+    <!-- Tab 3: Attendance -->
+    <div id="tab-attendance" style="display:none;">
+      <div id="emp-attendance-list"><p>Loading attendance…</p></div>
+    </div>
   </div>
 
   <script src="app.js"></script>
   <script>
-    document.getElementById('btn-login').addEventListener('click', function() {
-      var name = document.getElementById('inp-name').value.trim();
-      var pin  = document.getElementById('inp-pin').value.trim();
-      if (!name || !pin) { document.getElementById('login-error').textContent = 'Enter name and PIN.'; return; }
-      login(name, pin, function(err, user) {
-        if (err) { document.getElementById('login-error').textContent = err.message; return; }
-        document.getElementById('login-view').style.display = 'none';
-        document.getElementById('employee-view').style.display = 'block';
-        document.getElementById('welcome-msg').textContent = 'Welcome, ' + user.name;
-        loadEmployeeConfig(user);
-        // heads go to admin
-        if (user.role === 'head') window.location.href = 'admin.html';
+    document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('btn-login').addEventListener('click', function() {
+        var name = document.getElementById('inp-name').value.trim();
+        var pin  = document.getElementById('inp-pin').value.trim();
+        if (!name || !pin) { document.getElementById('login-error').textContent = 'Enter name and PIN.'; return; }
+        login(name, pin, function(err, user) {
+          if (err) { document.getElementById('login-error').textContent = err.message; return; }
+          if (user.role === 'head') { window.location.href = 'admin.html'; return; }
+          document.getElementById('login-view').style.display   = 'none';
+          document.getElementById('employee-view').style.display = 'block';
+          document.getElementById('welcome-msg').textContent = 'Welcome, ' + user.name;
+          loadEmployeeConfig(user);
+        });
+      });
+
+      // Event delegation for + Fare / + Accom per-row buttons in the period sheet.
+      // Attached once to the stable #emp-period-sheet container — the container
+      // itself never gets replaced (only its innerHTML), so delegation survives
+      // every period-sheet re-render without re-attaching.
+      document.getElementById('emp-period-sheet').addEventListener('click', function(ev) {
+        var btn = ev.target.closest('.emp-claim-btn');
+        if (!btn) return;
+        openClaimForm(btn.dataset.date, btn.dataset.type);
       });
     });
 
-    function submitClaim() {
+    // ---- Tab switching ----
+    function switchTab(tab) {
+      ['sheet', 'claims', 'attendance'].forEach(function(t) {
+        document.getElementById('tab-' + t).style.display = (t === tab) ? 'block' : 'none';
+        document.getElementById('tab-btn-' + t).classList.toggle('active', t === tab);
+      });
       var user = currentUser();
-      var dateVal = document.getElementById('cl-date').value;
+      var cfg  = getStoredConfig();
+      if (tab === 'claims')     loadMyClaims(user);
+      if (tab === 'attendance') loadAttendance(user, cfg);
+    }
+
+    // ---- Inline claim form ----
+    function openClaimForm(date, type) {
+      var dateEl = document.getElementById('cl-date');
+      if (date) {
+        dateEl.value = date;
+        dateEl.setAttribute('readonly', 'readonly');
+      } else {
+        dateEl.value = '';
+        dateEl.removeAttribute('readonly');
+      }
+      document.getElementById('cl-type').value = type;
+      document.getElementById('cl-form-title').textContent =
+        type === 'accommodation' ? 'Submit Accommodation Claim' : 'Submit Fare Claim';
+      // Show FROM/TO/MODE only for fare claims
+      document.getElementById('cl-fare-fields').style.display =
+        type === 'accommodation' ? 'none' : 'block';
+      document.getElementById('cl-from').value   = '';
+      document.getElementById('cl-to').value     = '';
+      document.getElementById('cl-mode').value   = '';
+      document.getElementById('cl-amount').value = '';
+      document.getElementById('cl-notes').value  = '';
+      document.getElementById('cl-receipt').value = '';
+      document.getElementById('cl-msg').textContent = '';
+      var form = document.getElementById('emp-inline-claim');
+      form.style.display = 'block';
+      form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function hideClaimForm() {
+      document.getElementById('emp-inline-claim').style.display = 'none';
+    }
+
+    function submitClaim() {
+      var user      = currentUser();
+      var dateVal   = document.getElementById('cl-date').value;
       var claimType = document.getElementById('cl-type').value;
-      var amount  = parseFloat(document.getElementById('cl-amount').value);
-      // Amount is only required for special-fare/accommodation -- company
-      // service has no fare to claim, so it's exempt here.
+      var amount    = parseFloat(document.getElementById('cl-amount').value);
       if (!dateVal || (claimType !== 'company-service' && !amount)) {
         alert('Date and amount are required.');
         return;
       }
       if (isNaN(amount)) amount = 0;
-
       var config = getStoredConfig();
       var claim = {
         employee_name:   user.name,
         date:            dateVal,
         period_start:    config ? config.period_start : '',
-        period_end:      config ? config.period_end : '',
+        period_end:      config ? config.period_end   : '',
         type:            claimType,
         from_loc:        document.getElementById('cl-from').value.trim(),
         to_loc:          document.getElementById('cl-to').value.trim(),
@@ -103,9 +191,8 @@
         status:          'Submitted',
         approver_name:   '',
         approved_at:     '',
-        notes:            document.getElementById('cl-notes').value.trim()
+        notes:           document.getElementById('cl-notes').value.trim()
       };
-
       // Receipt: convert to base64 if provided.
       // KNOWN LIMITATION (accepted, not a bug): no size check or compression
       // here. Google Sheets cells cap at ~50,000 characters; a typical phone
@@ -115,8 +202,8 @@
       var file = document.getElementById('cl-receipt').files[0];
       if (file) {
         var reader = new FileReader();
-        reader.onload = function(e) {
-          claim.receipt_url = e.target.result; // base64 data URL stored in sheet
+        reader.onload = function(ev) {
+          claim.receipt_url = ev.target.result;
           finishSubmitClaim(claim);
         };
         reader.readAsDataURL(file);
@@ -128,16 +215,22 @@
     function finishSubmitClaim(claim) {
       api('saveClaim', { claim: claim }, function(err, id) {
         if (err) { alert(err.message); return; }
-        document.getElementById('cl-msg').textContent = 'Claim submitted! ID: ' + id;
+        document.getElementById('cl-msg').textContent = 'Submitted! ID: ' + id;
+        var user = currentUser();
+        var cfg  = getStoredConfig();
+        // Brief pause so user sees the confirmation, then reload period sheet
+        setTimeout(function() {
+          hideClaimForm();
+          loadEmployeePeriodSheet(user, cfg);
+        }, 1500);
       });
     }
 
+    // ---- Config / period sheet ----
     function getStoredConfig() {
-      // Config is fetched once when page loads and cached here
       return window._plConfig || null;
     }
 
-    // On employee-view load, fetch config to get current period dates
     function loadEmployeeConfig(user) {
       api('getConfig', {}, function(err, data) {
         if (err) return;
@@ -166,7 +259,71 @@
         period_end:    config.period_end
       }, function(err, sheet) {
         if (err) { out.innerHTML = '<p style="color:red;">' + escapeHtml(err.message) + '</p>'; return; }
-        out.innerHTML = renderPeriodSheet(sheet);
+        window._lastPeriodSheet = sheet;
+        out.innerHTML = renderPeriodSheet(sheet, { employeeControls: true });
+      });
+    }
+
+    // ---- My Claims tab ----
+    function loadMyClaims(user) {
+      var out = document.getElementById('emp-claims-list');
+      out.innerHTML = '<p>Loading your claims…</p>';
+      api('getClaims', { employee_name: user.name }, function(err, claims) {
+        if (err) { out.innerHTML = '<p style="color:red;">' + escapeHtml(err.message) + '</p>'; return; }
+        if (!claims || !claims.length) { out.innerHTML = '<p>No claims submitted yet.</p>'; return; }
+        claims.sort(function(a, b) { return a.date < b.date ? 1 : -1; }); // newest-first
+        var html = '<div class="table-scroll"><table>' +
+          '<thead><tr><th>DATE</th><th>TYPE</th><th>FROM → TO</th><th>MODE</th><th>AMOUNT</th><th>STATUS</th></tr></thead><tbody>';
+        claims.forEach(function(c) {
+          var sc = (c.status || '').toLowerCase();
+          var route = (c.from_loc || '') + (c.to_loc ? ' → ' + c.to_loc : '');
+          html += '<tr>' +
+            '<td>' + escapeHtml(c.date || '') + '</td>' +
+            '<td>' + escapeHtml(c.type || '') + '</td>' +
+            '<td>' + escapeHtml(route) + '</td>' +
+            '<td>' + escapeHtml(c.vehicle_mode || '') + '</td>' +
+            '<td>' + formatCurrency(c.claimed_amount) + '</td>' +
+            '<td><span class="claim-status-badge claim-status-' + escapeHtml(sc) + '">' + escapeHtml(c.status || '') + '</span></td>' +
+            '</tr>';
+        });
+        html += '</tbody></table></div>';
+        out.innerHTML = html;
+      });
+    }
+
+    // ---- Attendance tab ----
+    function loadAttendance(user, config) {
+      var out = document.getElementById('emp-attendance-list');
+      if (!config) { out.innerHTML = '<p>Config not loaded yet — try again in a moment.</p>'; return; }
+      out.innerHTML = '<p>Loading attendance…</p>';
+      api('getAttendance', {
+        employee_name: user.name,
+        period_start:  config.period_start,
+        period_end:    config.period_end
+      }, function(err, records) {
+        if (err) { out.innerHTML = '<p style="color:red;">' + escapeHtml(err.message) + '</p>'; return; }
+        if (!records || !records.length) { out.innerHTML = '<p>No attendance records found for this period.</p>'; return; }
+        records.sort(function(a, b) { return a.timestamp > b.timestamp ? 1 : -1; });
+        var html = '<div class="table-scroll"><table>' +
+          '<thead><tr><th>DATE</th><th>TIME</th><th>TYPE</th><th>DESTINATION</th><th>GPS</th></tr></thead><tbody>';
+        records.forEach(function(r) {
+          var ts   = r.timestamp || '';
+          var sep  = ts.indexOf('T') !== -1 ? 'T' : ' ';
+          var date = ts.split(sep)[0] || '';
+          var time = (ts.split(sep)[1] || '').substring(0, 5); // HH:MM
+          var lat  = parseFloat(r.lat  || 0);
+          var lng  = parseFloat(r.lng  || 0);
+          var gps  = (lat || lng) ? (lat.toFixed(4) + ', ' + lng.toFixed(4)) : '—';
+          html += '<tr>' +
+            '<td>' + escapeHtml(date) + '</td>' +
+            '<td>' + escapeHtml(time) + '</td>' +
+            '<td>' + escapeHtml(r.type || '') + '</td>' +
+            '<td>' + escapeHtml(r.destination || '') + '</td>' +
+            '<td style="font-size:.82em;color:#555;">' + escapeHtml(gps) + '</td>' +
+            '</tr>';
+        });
+        html += '</tbody></table></div>';
+        out.innerHTML = html;
       });
     }
   </script>

@@ -625,6 +625,13 @@ function handleGetPeriodSheet(payload) {
            c['status'] === 'Approved' &&
            (c['type'] === 'special-fare' || c['type'] === 'accommodation');
   });
+  // Approved + Submitted — for display metadata only (claim_details per row).
+  // Amount calculations below still use specialClaims (Approved-only).
+  var specialClaimsAll = allClaims.filter(function(c) {
+    return c['employee_name'] === payload.employee_name &&
+           (c['status'] === 'Approved' || c['status'] === 'Submitted') &&
+           (c['type'] === 'special-fare' || c['type'] === 'accommodation');
+  });
 
   // Approved Company Service claims suppress that date's auto-computed
   // fare only — meal/accom/midnight/OT are unaffected (see
@@ -745,7 +752,20 @@ function handleGetPeriodSheet(payload) {
       meal_denied:  mealDenied,
       accom:        accom + specialAccom,
       midnight:     midnight,
-      total_allowance: (autoFare + specialFare) + meal + (accom + specialAccom) + midnight
+      total_allowance: (autoFare + specialFare) + meal + (accom + specialAccom) + midnight,
+      claim_details: specialClaimsAll
+        .filter(function(c) { return claimDateKey(c['date']) === date; })
+        .map(function(c) {
+          return {
+            id:             c['id'],
+            type:           c['type'],
+            from_loc:       c['from_loc']     || '',
+            to_loc:         c['to_loc']       || '',
+            vehicle_mode:   c['vehicle_mode'] || '',
+            claimed_amount: parseFloat(c['claimed_amount'] || 0),
+            status:         c['status']
+          };
+        })
     });
   });
 

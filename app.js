@@ -75,7 +75,8 @@ function escapeHtml(str) {
 // escapeHtml() and formatCurrency() above.
 function renderPeriodSheet(sheet, opts) {
   opts = opts || {};
-  var adminControls = !!opts.adminControls;
+  var adminControls    = !!opts.adminControls;
+  var employeeControls = !!opts.employeeControls;
   var e = sheet.employee;
   var html = '<div id="printable-sheet">';
   html += '<div style="display:flex;justify-content:space-between;margin-bottom:12px;">';
@@ -85,55 +86,112 @@ function renderPeriodSheet(sheet, opts) {
           '<b>MOTHER BRANCH:</b> ' + escapeHtml(e.mother_branch) + '</div>';
   html += '</div>';
   html += '<div class="table-scroll"><table>';
-  html += '<thead><tr>' +
-    '<th>DATE</th><th>BRANCH</th><th>IN</th><th>OUT</th><th>HRS</th>' +
-    '<th>AUTO FARE</th><th>SPECIAL FARE</th><th>TOTAL FARE</th>' +
-    '<th>MEAL</th><th>ACCOM</th><th>MIDNIGHT</th><th>TOTAL</th>' +
-    (adminControls ? '<th>MEAL CTRL</th>' : '') +
-    '</tr></thead><tbody>';
+  if (employeeControls) {
+    html += '<thead><tr>' +
+      '<th>DATE</th><th>BRANCH</th><th>IN</th><th>OUT</th><th>HRS</th>' +
+      '<th>FROM</th><th>TO</th><th>MODE</th><th>FARE AMT</th>' +
+      '<th>MEAL</th><th>ACCOM</th><th>MIDNIGHT</th><th>TOTAL</th>' +
+      '<th>FARE CLAIM</th><th>ACCOM CLAIM</th>' +
+      '</tr></thead><tbody>';
+  } else {
+    html += '<thead><tr>' +
+      '<th>DATE</th><th>BRANCH</th><th>IN</th><th>OUT</th><th>HRS</th>' +
+      '<th>AUTO FARE</th><th>SPECIAL FARE</th><th>TOTAL FARE</th>' +
+      '<th>MEAL</th><th>ACCOM</th><th>MIDNIGHT</th><th>TOTAL</th>' +
+      (adminControls ? '<th>MEAL CTRL</th>' : '') +
+      '</tr></thead><tbody>';
+  }
   sheet.rows.forEach(function(r) {
     html += '<tr>' +
       '<td>' + escapeHtml(r.date) + '</td>' +
       '<td>' + escapeHtml(r.branch) + '</td>' +
       '<td>' + escapeHtml(r.time_in) + '</td>' +
       '<td>' + escapeHtml(r.time_out) + '</td>' +
-      '<td>' + r.hours_worked + '</td>' +
-      '<td>' + formatCurrency(r.auto_fare) + '</td>' +
-      '<td>' + formatCurrency(r.special_fare) + '</td>' +
-      '<td><b>' + formatCurrency(r.total_fare) + '</b></td>' +
-      '<td>' + formatCurrency(r.meal) + '</td>' +
-      '<td>' + formatCurrency(r.accom) + '</td>' +
-      '<td>' + formatCurrency(r.midnight) + '</td>' +
-      '<td><b>' + formatCurrency(r.total_allowance) + '</b></td>';
-    if (adminControls) {
-      // Button must remain visible on a denied row (meal forced to 0 by
-      // the server) so the admin can reverse the denial — checking only
-      // `r.meal > 0` would make the button disappear the moment a row
-      // is denied. r.date is a plain 'YYYY-MM-DD' string (never
-      // employee-authored free text), but it's escaped anyway for the
-      // attribute value per this file's existing convention.
-      if (r.meal > 0 || r.meal_denied) {
-        html += '<td><button class="meal-deny-btn" data-date="' + escapeHtml(r.date) + '">' +
-          (r.meal_denied ? 'Allow Meal' : 'Deny Meal') + '</button></td>';
+      '<td>' + r.hours_worked + '</td>';
+
+    if (employeeControls) {
+      var claimDetails = r.claim_details || [];
+      var fareClaim  = null;
+      var accumClaim = null;
+      claimDetails.forEach(function(c) {
+        if (c.type === 'special-fare'  && !fareClaim)  fareClaim  = c;
+        if (c.type === 'accommodation' && !accumClaim) accumClaim = c;
+      });
+      html +=
+        '<td>' + escapeHtml(fareClaim ? fareClaim.from_loc    : '') + '</td>' +
+        '<td>' + escapeHtml(fareClaim ? fareClaim.to_loc      : '') + '</td>' +
+        '<td>' + escapeHtml(fareClaim ? fareClaim.vehicle_mode : '') + '</td>' +
+        '<td>' + formatCurrency(r.total_fare) + '</td>' +
+        '<td>' + formatCurrency(r.meal) + '</td>' +
+        '<td>' + formatCurrency(r.accom) + '</td>' +
+        '<td>' + formatCurrency(r.midnight) + '</td>' +
+        '<td><b>' + formatCurrency(r.total_allowance) + '</b></td>';
+      // FARE CLAIM column: + Fare button or status badge
+      if (!fareClaim) {
+        html += '<td><button class="emp-claim-btn" data-date="' + escapeHtml(r.date) + '" data-type="special-fare">+ Fare</button></td>';
       } else {
-        html += '<td></td>';
+        var fareLabel = fareClaim.status === 'Approved' ? '✓ Approved' : '⏳ Pending';
+        html += '<td><span class="claim-status-badge claim-status-' + escapeHtml(fareClaim.status.toLowerCase()) + '">' + fareLabel + '</span></td>';
+      }
+      // ACCOM CLAIM column: + Accom button or status badge
+      if (!accumClaim) {
+        html += '<td><button class="emp-claim-btn" data-date="' + escapeHtml(r.date) + '" data-type="accommodation">+ Accom</button></td>';
+      } else {
+        var accumLabel = accumClaim.status === 'Approved' ? '✓ Approved' : '⏳ Pending';
+        html += '<td><span class="claim-status-badge claim-status-' + escapeHtml(accumClaim.status.toLowerCase()) + '">' + accumLabel + '</span></td>';
+      }
+    } else {
+      html +=
+        '<td>' + formatCurrency(r.auto_fare) + '</td>' +
+        '<td>' + formatCurrency(r.special_fare) + '</td>' +
+        '<td><b>' + formatCurrency(r.total_fare) + '</b></td>' +
+        '<td>' + formatCurrency(r.meal) + '</td>' +
+        '<td>' + formatCurrency(r.accom) + '</td>' +
+        '<td>' + formatCurrency(r.midnight) + '</td>' +
+        '<td><b>' + formatCurrency(r.total_allowance) + '</b></td>';
+      if (adminControls) {
+        // Button must remain visible on a denied row (meal forced to 0 by
+        // the server) so the admin can reverse the denial — checking only
+        // `r.meal > 0` would make the button disappear the moment a row
+        // is denied. r.date is a plain 'YYYY-MM-DD' string (never
+        // employee-authored free text), but it's escaped anyway for the
+        // attribute value per this file's existing convention.
+        if (r.meal > 0 || r.meal_denied) {
+          html += '<td><button class="meal-deny-btn" data-date="' + escapeHtml(r.date) + '">' +
+            (r.meal_denied ? 'Allow Meal' : 'Deny Meal') + '</button></td>';
+        } else {
+          html += '<td></td>';
+        }
       }
     }
     html += '</tr>';
   });
   // Totals row
   var t = sheet.totals;
-  html += '<tr style="font-weight:bold;background:var(--blue2);color:#fff;">' +
-    '<td colspan="5">TOTALS</td>' +
-    '<td>' + formatCurrency(t.auto_fare) + '</td>' +
-    '<td>' + formatCurrency(t.special_fare) + '</td>' +
-    '<td>' + formatCurrency(t.total_fare) + '</td>' +
-    '<td>' + formatCurrency(t.meal) + '</td>' +
-    '<td>' + formatCurrency(t.accom) + '</td>' +
-    '<td>' + formatCurrency(t.midnight) + '</td>' +
-    '<td>' + formatCurrency(t.total) + '</td>' +
-    (adminControls ? '<td></td>' : '') +
-    '</tr>';
+  if (employeeControls) {
+    html += '<tr style="font-weight:bold;background:var(--blue2);color:#fff;">' +
+      '<td colspan="5">TOTALS</td>' +
+      '<td colspan="3"></td>' +
+      '<td>' + formatCurrency(t.total_fare) + '</td>' +
+      '<td>' + formatCurrency(t.meal) + '</td>' +
+      '<td>' + formatCurrency(t.accom) + '</td>' +
+      '<td>' + formatCurrency(t.midnight) + '</td>' +
+      '<td>' + formatCurrency(t.total) + '</td>' +
+      '<td colspan="2"></td>' +
+      '</tr>';
+  } else {
+    html += '<tr style="font-weight:bold;background:var(--blue2);color:#fff;">' +
+      '<td colspan="5">TOTALS</td>' +
+      '<td>' + formatCurrency(t.auto_fare) + '</td>' +
+      '<td>' + formatCurrency(t.special_fare) + '</td>' +
+      '<td>' + formatCurrency(t.total_fare) + '</td>' +
+      '<td>' + formatCurrency(t.meal) + '</td>' +
+      '<td>' + formatCurrency(t.accom) + '</td>' +
+      '<td>' + formatCurrency(t.midnight) + '</td>' +
+      '<td>' + formatCurrency(t.total) + '</td>' +
+      (adminControls ? '<td></td>' : '') +
+      '</tr>';
+  }
   html += '</tbody></table></div></div>';
   return html;
 }
