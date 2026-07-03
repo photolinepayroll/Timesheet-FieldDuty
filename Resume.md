@@ -30,12 +30,19 @@ already working correctly), this was found:
   `Users.name` spelling without first checking what the attendance CSV
   actually has for that person via `getAttendance`, or you will silently
   break their period sheet (zero rows, no error).
+- **Status as of 2026-07-03: walked the admin through the manual
+  Find-and-Replace fix in the live Sheet (`EmployeeRates` tab, "JUDE
+  PATANI" → "jude H patani", 14 rows) this session, but the conversation
+  moved on to other bugs before getting explicit confirmation it was
+  completed and verified live.** Don't assume this is done — check
+  `getRates` or a live period-sheet generation for Jude Patani before
+  trusting his rates, same as before.
 
 ---
 
-## Status: app is live, expense-only (OT/UT removed), GPS-fallback area classification shipped, real per-employee rate data imported, meal-allowance incomplete-log auto-grant + admin deny override shipped, employee 3-tab self-service dashboard shipped. Six workstreams below are DONE.
+## Status: app is live, expense-only (OT/UT removed), GPS-fallback area classification shipped, real per-employee rate data imported, meal-allowance incomplete-log auto-grant + admin deny override shipped, employee 3-tab self-service dashboard shipped, meal-control batching + clear status indicator shipped, receipt-photo mobile fix + admin receipt viewer/editable-claimed-amount shipped. Eight workstreams below are DONE.
 
-Six big things shipped, all committed:
+Eight big things shipped, all committed:
 
 1. **Removed OT/UT/Offset entirely** — the app is now expense-only (fare,
    meal, accommodation, midnight allowance). Also fixed a real live bug
@@ -70,6 +77,44 @@ Six big things shipped, all committed:
    no longer auto-fetches on tab switch; `loadEmployeeConfig` only pre-fills
    the inputs; new `loadCurrentTab()` dispatches to the active tab's loader.
    Commit `f32d5ea`.
+7. **Meal-control batching + clear allow/deny status indicator** — the
+   admin's Deny/Allow Meal button used to call `toggleMealDenial` on the
+   server AND re-fetch the whole period sheet on every single click,
+   making it slow to review a sheet row by row. Clicks now flip state
+   only in the browser; a "💾 Save Meal Changes (N)" button (appears only
+   when there are pending toggles) batches the actual `toggleMealDenial`
+   calls and refreshes once. Also fixed a real UX bug found during
+   testing: the button's label was the ACTION ("Allow Meal" = click to
+   reverse a denial), not the current STATUS, so a denied row displaying
+   "Allow Meal" read like the meal was currently allowed. Added an
+   explicit colored ALLOWED/DENIED status word plus button background
+   color so state is unambiguous regardless of button text. Commit
+   `d11d599`.
+8. **Receipt-photo mobile fix + admin receipt viewer/editable claimed
+   amount** — three related fixes to the receipt-photo pipeline and
+   Claims approval queue:
+   - `index.html`: removed `capture="environment"` from the receipt file
+     input — it was forcing mobile browsers straight to the camera,
+     skipping the photo-album option entirely.
+   - `index.html`: added `compressReceiptImage()` — resizes to max
+     1600px on the longest side and re-encodes as JPEG at 70% quality via
+     canvas before converting to base64, replacing the old
+     raw-file-to-base64 path. This also fixes the previously-documented
+     known gap where an uncompressed phone photo's base64 could exceed
+     Google Sheets' ~50,000-char cell limit.
+   - `admin.html`: Claims approval queue gained a receipt-photo popup
+     viewer (new `#receipt-modal` overlay — first modal pattern in this
+     codebase, plain fixed-position div, no framework) and an editable
+     Claimed-amount `<input>` (was read-only). Approve now sends the
+     admin's (possibly-corrected) amount along with the decision; Reject
+     leaves the originally-submitted amount untouched (confirmed
+     explicitly — only Approve should be able to change the paid amount).
+   - `Code.gs`'s `handleApproveClaim` writes the corrected
+     `claimed_amount` to the sheet, gated server-side on
+     `payload.decision === 'approve'` (not just trusting the client to
+     omit the field on reject).
+   Commit `d2b7964`. **The `Code.gs` change needs a manual redeploy
+   before it takes effect live** — see "What's deployed right now".
 
 ---
 
@@ -296,6 +341,13 @@ fallback limitation, just newly visible because this feature removed the
 ## Full commit log (newest first, this session's additions on top)
 
 ```
+d2b7964 feat: receipt photo viewer + editable claimed amount, mobile album picker fix
+d11d599 feat: batch meal-control saves, add clear allow/deny status indicator
+37ec95c docs: update Resume.md for GitHub Pages, add CLAUDE.md project context
+ad7d1c7 config: set live deployment URL for GitHub Pages
+a82a6bf merge: resolve README conflict, combine title with app description
+0957911 docs: add original planning and design md files
+68cc9b9 docs: update Resume.md — employee dashboard + lazy load shipped
 f32d5ea fix: manual date range entry + lazy load to prevent hang on login
 9a24921 feat: employee 3-tab dashboard — My Sheet, My Claims, Attendance
 0bf8365 docs: update Resume.md — meal incomplete-log auto-grant shipped, flag Jude Patani EmployeeRates name mismatch
@@ -328,14 +380,21 @@ d150af2 feat: remove OT/UT/Offset computation, descope app to expense-only
   `MidnightRates`, `LTFRBRates`, `Claims`, `Config`, `RawRateImport`
   (scratch staging, reused each bulk-import — admin's call whether to keep
   as audit trail).
-- **Live Apps Script Web App** — `Code.gs` changes from workstream 5
-  (`claim_details` per row in `handleGetPeriodSheet`) have been committed
-  locally but **need to be redeployed** (paste current `Code.gs` into the
-  Apps Script editor → Deploy → Manage deployments → New version → Deploy,
-  same URL as always) before `index.html`'s My Sheet tab will show
-  FROM/TO/MODE columns with real data. `app.js`'s `SCRIPT_URL` is now
-  **committed to git** (real URL in the repo) to enable GitHub Pages hosting
-  — this is a change from prior convention where it was kept uncommitted.
+- **Live Apps Script Web App** — two `Code.gs` changes are committed
+  locally but **not yet redeployed** to the live Web App (one manual
+  redeploy picks up both at once: paste current `Code.gs` into the Apps
+  Script editor → Deploy → Manage deployments → New version → Deploy,
+  same URL as always):
+  1. Workstream 5's `claim_details` per row in `handleGetPeriodSheet` —
+     needed before `index.html`'s My Sheet tab shows real FROM/TO/MODE data.
+  2. Workstream 8's `handleApproveClaim` change — writes the admin's
+     corrected `claimed_amount` on Approve. Until redeployed, editing the
+     amount in `admin.html`'s Claims queue and clicking Approve will NOT
+     actually save the correction (the UI will look like it worked, but
+     the live backend silently ignores the new field).
+  `app.js`'s `SCRIPT_URL` is now **committed to git** (real URL in the
+  repo) to enable GitHub Pages hosting — this is a change from prior
+  convention where it was kept uncommitted.
 - **GitHub Pages** — repo pushed to `github.com/photolinepayroll/Timesheet-FieldDuty`
   (public), GitHub Pages enabled on `main` branch. Live URL:
   `https://photolinepayroll.github.io/Timesheet-FieldDuty/` (may still be
@@ -359,7 +418,7 @@ d150af2 feat: remove OT/UT/Offset computation, descope app to expense-only
 - **Current period in Config**: `period_start = 2026-06-11`,
   `period_end = 2026-06-25`.
 
-## Admin/product decisions confirmed during this session (don't re-ask)
+## Admin/product decisions confirmed 2026-06-26 session (don't re-ask)
 
 1. **App is expense-only now** — fare, meal, accommodation, midnight. No
    OT/UT/Offset tracking at all, anywhere.
@@ -399,6 +458,22 @@ d150af2 feat: remove OT/UT/Offset computation, descope app to expense-only
     `EmployeeRates` — deliberate, since this tab is written by the app from
     an already-resolved name, never hand-typed from an external source.
 
+## Admin/product decisions confirmed 2026-07-03 session (don't re-ask)
+
+1. **Meal-control clicks batch locally, then save in one shot** — the
+   admin explicitly asked for this after finding per-click server
+   round-trips too slow: toggle buttons flip state in the browser only;
+   a "Save Meal Changes" button sends the actual writes.
+2. **Editing the Claimed amount only takes effect on Approve, never
+   Reject** — confirmed explicitly when designing the Claims-queue amount
+   edit; a rejected claim's amount is left as originally submitted.
+3. **Receipt photo viewer is a popup overlay on the same page**, not a
+   new-tab image link — confirmed explicitly (first modal pattern
+   introduced into this codebase).
+4. **Mobile receipt upload must offer the photo album, not just the
+   camera** — `capture="environment"` was removed from the file input for
+   this reason.
+
 ## Admin/product decisions from earlier sessions (still valid, don't re-ask)
 
 1. **Round-trip fares**: IN→OUT GPS leg is one-way; fare is DOUBLED via
@@ -417,8 +492,12 @@ d150af2 feat: remove OT/UT/Offset computation, descope app to expense-only
 
 - `employee_id` column in `Claims` is defined but never populated — keys off
   `name` instead everywhere. Harmless.
-- Base64 receipt photos in a `Claims` cell can exceed Sheets' ~50,000-char
-  limit for large images — documented inline, not fixed.
+- ~~Base64 receipt photos in a `Claims` cell can exceed Sheets' ~50,000-char
+  limit for large images~~ — **addressed 2026-07-03**: `index.html`'s
+  `compressReceiptImage()` now resizes to max 1600px + re-encodes as JPEG
+  @70% quality before upload, keeping base64 size well under the cap. Not
+  a hard guarantee for an extreme source image, but no longer an
+  unmitigated gap.
 - `getRoadDistanceKm`'s OSRM-then-Haversine fallback swallows errors
   silently — no flagging if OSRM is down for an extended period.
 - `c.id` is deliberately left unescaped in one `onclick` attribute in
