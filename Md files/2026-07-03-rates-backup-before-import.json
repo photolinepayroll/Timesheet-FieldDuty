@@ -1,0 +1,1317 @@
+﻿{
+    "employeeRates":  [
+                          {
+                              "employee_name":  "ANN CHRISTINE JOY TRIA",
+                              "department":  "",
+                              "area":  "SM CLARK",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "ANN CHRISTINE JOY TRIA",
+                              "department":  "",
+                              "area":  "NEPO ANGELES",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "ANN CHRISTINE JOY TRIA",
+                              "department":  "",
+                              "area":  "SM TELABASTAGAN",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "ANN CHRISTINE JOY TRIA",
+                              "department":  "",
+                              "area":  "SM PAMPANGA",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "ANN CHRISTINE JOY TRIA",
+                              "department":  "",
+                              "area":  "SM BATAAN",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "ANN CHRISTINE JOY TRIA",
+                              "department":  "",
+                              "area":  "VISTA MALL",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "ANN CHRISTINE JOY TRIA",
+                              "department":  "",
+                              "area":  "R.GAPAN",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "CAROL BELTRAN",
+                              "department":  "",
+                              "area":  "NCR BRANCH",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "CAROL BELTRAN",
+                              "department":  "",
+                              "area":  "NORTH LUZON",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "CAROL BELTRAN",
+                              "department":  "",
+                              "area":  "SOUTH LUZON",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "CHRISTIAN CAIDOY",
+                              "department":  "",
+                              "area":  "SM STA MESA",
+                              "meal_amount":  0,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "CHRISTIAN CAIDOY",
+                              "department":  "",
+                              "area":  "SM MARIKINA",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "CHRISTIAN CAIDOY",
+                              "department":  "",
+                              "area":  "SM MASINAG",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "CHRISTIAN CAIDOY",
+                              "department":  "",
+                              "area":  "SM TAYTAY",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "CHRISTIAN CAIDOY",
+                              "department":  "",
+                              "area":  "V.ANTIPOLO",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "CHRISTIAN CAIDOY",
+                              "department":  "",
+                              "area":  "R.ANTIPOLO",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "CHRISTIAN CAIDOY",
+                              "department":  "",
+                              "area":  "ONE AYALA MAKATI",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "CRISPIN CASIL",
+                              "department":  "",
+                              "area":  "SM NOVA",
+                              "meal_amount":  0,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "CRISPIN CASIL",
+                              "department":  "",
+                              "area":  "SM CALOOCAN",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "CRISPIN CASIL",
+                              "department":  "",
+                              "area":  "AYALA FAIRVIEW",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "CRISPIN CASIL",
+                              "department":  "",
+                              "area":  "SM FAIRVIEW",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "CRISPIN CASIL",
+                              "department":  "",
+                              "area":  "SM SAN JOSE",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "CRISPIN CASIL",
+                              "department":  "",
+                              "area":  "SM MARILAO",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "CRISPIN CASIL",
+                              "department":  "",
+                              "area":  "SM BALIWAG",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "DARWIN TOLEDO",
+                              "department":  "",
+                              "area":  "R.ERMITA",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "DARWIN TOLEDO",
+                              "department":  "",
+                              "area":  "R.ERMITA PRO",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "DARWIN TOLEDO",
+                              "department":  "",
+                              "area":  "SM MANILA",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "DARWIN TOLEDO",
+                              "department":  "",
+                              "area":  "SM SOUTHMALL",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "DARWIN TOLEDO",
+                              "department":  "",
+                              "area":  "SM LAS PINAS",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "DARWIN TOLEDO",
+                              "department":  "",
+                              "area":  "SM SAN LAZARO",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "DARWIN TOLEDO",
+                              "department":  "",
+                              "area":  "SM GRAND CENTRAL",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "DARWIN TOLEDO",
+                              "department":  "",
+                              "area":  "ARCA SOUTH AYALA",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "EMELITO GENITA",
+                              "department":  "",
+                              "area":  "SM CDO",
+                              "meal_amount":  0,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "EMELITO GENITA",
+                              "department":  "",
+                              "area":  "SM CDO UPTOWN",
+                              "meal_amount":  0,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "EMELITO GENITA",
+                              "department":  "",
+                              "area":  "R. ILIGAN",
+                              "meal_amount":  100,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "EMELITO GENITA",
+                              "department":  "",
+                              "area":  "SM BUTUAN",
+                              "meal_amount":  100,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "EMELITO GENITA",
+                              "department":  "",
+                              "area":  "SM LANANG",
+                              "meal_amount":  100,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "EMELITO GENITA",
+                              "department":  "",
+                              "area":  "ABREEZA DAVAO",
+                              "meal_amount":  100,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "EMELITO GENITA",
+                              "department":  "",
+                              "area":  "SM DAVAO",
+                              "meal_amount":  100,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "EMELITO GENITA",
+                              "department":  "",
+                              "area":  "SM GENSAN",
+                              "meal_amount":  100,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "EMELITO GENITA",
+                              "department":  "",
+                              "area":  "GMALL TAGUM",
+                              "meal_amount":  150,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "GLENN HECITA",
+                              "department":  "",
+                              "area":  "E MALL NAGA",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "GLENN HECITA",
+                              "department":  "",
+                              "area":  "LCC POLANGUI",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "GLENN HECITA",
+                              "department":  "",
+                              "area":  "SM DAET",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "JAY MARK DE SAHAGUN",
+                              "department":  "",
+                              "area":  "SM NORTH MAIN",
+                              "meal_amount":  0,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "JAY MARK DE SAHAGUN",
+                              "department":  "",
+                              "area":  "MARKET MARKET",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "JAY MARK DE SAHAGUN",
+                              "department":  "",
+                              "area":  "SM AURA",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "JAY MARK DE SAHAGUN",
+                              "department":  "",
+                              "area":  "R. GALLERIA",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "JAY MARK DE SAHAGUN",
+                              "department":  "",
+                              "area":  "SM SAN MATEO",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "JAY MARK DE SAHAGUN",
+                              "department":  "",
+                              "area":  "C.CENTER",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "JIEL LUMANTA",
+                              "department":  "",
+                              "area":  "SM TANZA",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "JIEL LUMANTA",
+                              "department":  "",
+                              "area":  "SM BACOOR",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "JIEL LUMANTA",
+                              "department":  "",
+                              "area":  "R.IMUS",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "JIEL LUMANTA",
+                              "department":  "",
+                              "area":  "SM CALAMBA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "JIEL LUMANTA",
+                              "department":  "",
+                              "area":  "SM STA ROSA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "JIEL LUMANTA",
+                              "department":  "",
+                              "area":  "R.GALLERIA SOUTH",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "JIEL LUMANTA",
+                              "department":  "",
+                              "area":  "SM SAN PEDRO",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "JOHN KURT CERVERA",
+                              "department":  "",
+                              "area":  "NCR BRANCH",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "JOHN KURT CERVERA",
+                              "department":  "",
+                              "area":  "NORTH LUZON",
+                              "meal_amount":  100,
+                              "accom_amount":  400
+                          },
+                          {
+                              "employee_name":  "JOHN KURT CERVERA",
+                              "department":  "",
+                              "area":  "SOUTH LUZON",
+                              "meal_amount":  100,
+                              "accom_amount":  400
+                          },
+                          {
+                              "employee_name":  "JOHN REY GABAS",
+                              "department":  "",
+                              "area":  "R. CEBU",
+                              "meal_amount":  0,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "JOHN REY GABAS",
+                              "department":  "",
+                              "area":  "SM SEASIDE",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "JOHN REY GABAS",
+                              "department":  "",
+                              "area":  "R. TACLOBAN",
+                              "meal_amount":  100,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "JORWEN CACHO",
+                              "department":  "",
+                              "area":  "SM ROSALES",
+                              "meal_amount":  75,
+                              "accom_amount":  300
+                          },
+                          {
+                              "employee_name":  "JORWEN CACHO",
+                              "department":  "",
+                              "area":  "SM URDANETA",
+                              "meal_amount":  150,
+                              "accom_amount":  300
+                          },
+                          {
+                              "employee_name":  "JORWEN CACHO",
+                              "department":  "",
+                              "area":  "MARQUEE MALL",
+                              "meal_amount":  150,
+                              "accom_amount":  300
+                          },
+                          {
+                              "employee_name":  "JORWEN CACHO",
+                              "department":  "",
+                              "area":  "MAGIC MALL SAN CARLOS",
+                              "meal_amount":  150,
+                              "accom_amount":  300
+                          },
+                          {
+                              "employee_name":  "JORWEN CACHO",
+                              "department":  "",
+                              "area":  "OLONGAPO AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  300
+                          },
+                          {
+                              "employee_name":  "LOUWIN CELIS",
+                              "department":  "",
+                              "area":  "DAGUPAN AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "LOUWIN CELIS",
+                              "department":  "",
+                              "area":  "BICOL AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "LOUWIN CELIS",
+                              "department":  "",
+                              "area":  "VIZ/MIN AREA",
+                              "meal_amount":  200,
+                              "accom_amount":  400
+                          },
+                          {
+                              "employee_name":  "MARICEL CAYACAP",
+                              "department":  "",
+                              "area":  "NCR BRANCH",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "MARICEL CAYACAP",
+                              "department":  "",
+                              "area":  "RIZAL AREA",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "MARICEL CAYACAP",
+                              "department":  "",
+                              "area":  "BULACAN AREA",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "MARICEL CAYACAP",
+                              "department":  "",
+                              "area":  "NORTH LUZON",
+                              "meal_amount":  200,
+                              "accom_amount":  400
+                          },
+                          {
+                              "employee_name":  "MARICEL CAYACAP",
+                              "department":  "",
+                              "area":  "BICOL AREA",
+                              "meal_amount":  300,
+                              "accom_amount":  400
+                          },
+                          {
+                              "employee_name":  "MARLON BRAVO",
+                              "department":  "",
+                              "area":  "CSI-2 MARKET",
+                              "meal_amount":  0,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "MARLON BRAVO",
+                              "department":  "",
+                              "area":  "SM DAGUPAN",
+                              "meal_amount":  0,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "MARLON BRAVO",
+                              "department":  "",
+                              "area":  "NEPO ALAMINOS",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "MARLON BRAVO",
+                              "department":  "",
+                              "area":  "MAGIC SAN CARLOS",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "MARLON BRAVO",
+                              "department":  "",
+                              "area":  "SM BAGUIO",
+                              "meal_amount":  100,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "MARLON BRAVO",
+                              "department":  "",
+                              "area":  "JTC VIGAN",
+                              "meal_amount":  100,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "MARLON BRAVO",
+                              "department":  "",
+                              "area":  "R.ILOCOS",
+                              "meal_amount":  100,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "RAYMOND MENIANO",
+                              "department":  "",
+                              "area":  "SM SANGANDAAN",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "RAYMOND MENIANO",
+                              "department":  "",
+                              "area":  "ALIMALL",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "RAYMOND MENIANO",
+                              "department":  "",
+                              "area":  "SM SUCAT",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "RAYMOND MENIANO",
+                              "department":  "",
+                              "area":  "FESTIVAL MALL",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "RAYMOND MENIANO",
+                              "department":  "",
+                              "area":  "ATC",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "RAYMOND MENIANO",
+                              "department":  "",
+                              "area":  "CASH AND CARRY",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "RAYMOND MENIANO",
+                              "department":  "",
+                              "area":  "SM MOA",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "ROBERT MENDOZA",
+                              "department":  "",
+                              "area":  "SM DASMA",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "ROBERT MENDOZA",
+                              "department":  "",
+                              "area":  "R.DASMA",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "ROBERT MENDOZA",
+                              "department":  "",
+                              "area":  "SM SAN PABLO",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "ROBERT MENDOZA",
+                              "department":  "",
+                              "area":  "SM STO TOMAS",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "ROBERT MENDOZA",
+                              "department":  "",
+                              "area":  "SM LIPA",
+                              "meal_amount":  150,
+                              "accom_amount":  300
+                          },
+                          {
+                              "employee_name":  "ROBERT MENDOZA",
+                              "department":  "",
+                              "area":  "SM BATANGAS",
+                              "meal_amount":  150,
+                              "accom_amount":  300
+                          },
+                          {
+                              "employee_name":  "RUEL CONCEPCION",
+                              "department":  "",
+                              "area":  "E-MALL NAGA",
+                              "meal_amount":  0,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "RUEL CONCEPCION",
+                              "department":  "",
+                              "area":  "LCC POLANGUI",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "RUEL CONCEPCION",
+                              "department":  "",
+                              "area":  "SM DAET",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "RUEL CONCEPCION",
+                              "department":  "",
+                              "area":  "SM LEGAZPI",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "RUEL CONCEPCION",
+                              "department":  "",
+                              "area":  "LCC LEGAZPI",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "RUEL CONCEPCION",
+                              "department":  "",
+                              "area":  "LCC TABACO",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "RUEL CONCEPCION",
+                              "department":  "",
+                              "area":  "SM SORSOGON",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "SHAIRA MAE MENDOZA",
+                              "department":  "",
+                              "area":  "CS1 LUCAO",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "SHAIRA MAE MENDOZA",
+                              "department":  "",
+                              "area":  "SM DAGUPAN",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "SHAIRA MAE MENDOZA",
+                              "department":  "",
+                              "area":  "NEPO ALAMINOS",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "SHAIRA MAE MENDOZA",
+                              "department":  "",
+                              "area":  "JTC VIGAN",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "SHAIRA MAE MENDOZA",
+                              "department":  "",
+                              "area":  "SM TUGUEGARAO",
+                              "meal_amount":  150,
+                              "accom_amount":  300
+                          },
+                          {
+                              "employee_name":  "SHAIRA MAE MENDOZA",
+                              "department":  "",
+                              "area":  "R.ILOCOS",
+                              "meal_amount":  150,
+                              "accom_amount":  300
+                          },
+                          {
+                              "employee_name":  "SHAIRA MAE MENDOZA",
+                              "department":  "",
+                              "area":  "SM LAOAG",
+                              "meal_amount":  150,
+                              "accom_amount":  300
+                          },
+                          {
+                              "employee_name":  "SHAIRA MAE MENDOZA",
+                              "department":  "",
+                              "area":  "SM LA UNION",
+                              "meal_amount":  150,
+                              "accom_amount":  300
+                          },
+                          {
+                              "employee_name":  "WALTER PUNZALAN",
+                              "department":  "",
+                              "area":  "R.ILOILO 2",
+                              "meal_amount":  0,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "WALTER PUNZALAN",
+                              "department":  "",
+                              "area":  "SM ILOILO",
+                              "meal_amount":  0,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "WALTER PUNZALAN",
+                              "department":  "",
+                              "area":  "R.ROXAS",
+                              "meal_amount":  100,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "WALTER PUNZALAN",
+                              "department":  "",
+                              "area":  "SM ROXAS",
+                              "meal_amount":  100,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "WALTER PUNZALAN",
+                              "department":  "",
+                              "area":  "R.ANTIQUE",
+                              "meal_amount":  100,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "WALTER PUNZALAN",
+                              "department":  "",
+                              "area":  "R.BACOLOD",
+                              "meal_amount":  100,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "WALTER PUNZALAN",
+                              "department":  "",
+                              "area":  "SM BACOLOD",
+                              "meal_amount":  100,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "WALTER PUNZALAN",
+                              "department":  "",
+                              "area":  "AYALA BACOLOD",
+                              "meal_amount":  100,
+                              "accom_amount":  200
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "Auditing",
+                              "area":  "NCR AREA",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "Auditing",
+                              "area":  "PAMPANGA AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "Auditing",
+                              "area":  "OLONGAPO AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  150
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "Auditing",
+                              "area":  "DAGUPAN AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  150
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "Auditing",
+                              "area":  "LAGUNA AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "Auditing",
+                              "area":  "CAVITE AREA",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "Auditing",
+                              "area":  "BICOL AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  150
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "Auditing",
+                              "area":  "VIZ/MIN AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  300
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "CARPENTERS",
+                              "area":  "NCR AREA",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "CARPENTERS",
+                              "area":  "PAMPANGA AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "CARPENTERS",
+                              "area":  "OLONGAPO AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "CARPENTERS",
+                              "area":  "DAGUPAN AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  150
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "CARPENTERS",
+                              "area":  "LAGUNA AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "CARPENTERS",
+                              "area":  "CAVITE AREA",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "CARPENTERS",
+                              "area":  "BICOL AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  150
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "CARPENTERS",
+                              "area":  "VIZ/MIN AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  300
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "ComTech",
+                              "area":  "NCR AREA",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "ComTech",
+                              "area":  "PAMPANGA AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "ComTech",
+                              "area":  "OLONGAPO AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "ComTech",
+                              "area":  "DAGUPAN AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  150
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "ComTech",
+                              "area":  "LAGUNA AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "ComTech",
+                              "area":  "CAVITE AREA",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "ComTech",
+                              "area":  "BICOL AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  150
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "ComTech",
+                              "area":  "VIZ/MIN AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  300
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "HR",
+                              "area":  "HEAD OFFICE",
+                              "meal_amount":  0,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "HR",
+                              "area":  "NCR AREA",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "HR",
+                              "area":  "PAMPANGA AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "HR",
+                              "area":  "OLONGAPO AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "HR",
+                              "area":  "DAGUPAN AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "HR",
+                              "area":  "LAGUNA AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "HR",
+                              "area":  "CAVITE AREA",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "HR",
+                              "area":  "BICOL AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "HR",
+                              "area":  "VIZ/MIN AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "Technical",
+                              "area":  "C. CENTER",
+                              "meal_amount":  0,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "Technical",
+                              "area":  "NCR AREA",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "Technical",
+                              "area":  "PAMPANGA AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "Technical",
+                              "area":  "OLONGAPO AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "Technical",
+                              "area":  "DAGUPAN AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  150
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "Technical",
+                              "area":  "LAGUNA AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "Technical",
+                              "area":  "CAVITE AREA",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "Technical",
+                              "area":  "BICOL AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  150
+                          },
+                          {
+                              "employee_name":  "",
+                              "department":  "Technical",
+                              "area":  "VIZ/MIN AREA",
+                              "meal_amount":  150,
+                              "accom_amount":  300
+                          },
+                          {
+                              "employee_name":  "jude H patani",
+                              "department":  "",
+                              "area":  "JENRA DAU",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "jude H patani",
+                              "department":  "",
+                              "area":  "NEPO ANGELES",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "jude H patani",
+                              "department":  "",
+                              "area":  "SM CLARK",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "jude H patani",
+                              "department":  "",
+                              "area":  "SM TELABASTAGAN",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "jude H patani",
+                              "department":  "",
+                              "area":  "SM PAMPANGA",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "jude H patani",
+                              "department":  "",
+                              "area":  "R.GAPAN",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "jude H patani",
+                              "department":  "",
+                              "area":  "VISTA MALL",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "jude H patani",
+                              "department":  "",
+                              "area":  "SM BATAAN",
+                              "meal_amount":  75,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "jude H patani",
+                              "department":  "",
+                              "area":  "SM TARLAC",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "jude H patani",
+                              "department":  "",
+                              "area":  "SM ROSALES",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "jude H patani",
+                              "department":  "",
+                              "area":  "SM OLONGAPO",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "jude H patani",
+                              "department":  "",
+                              "area":  "SM OLONGAPO CENTRAL",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "jude H patani",
+                              "department":  "",
+                              "area":  "HARBOR POINT",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "jude H patani",
+                              "department":  "",
+                              "area":  "BULACAN AREA",
+                              "meal_amount":  100,
+                              "accom_amount":  0
+                          },
+                          {
+                              "employee_name":  "Cris Taglucop",
+                              "department":  "Technical",
+                              "area":  "NCR",
+                              "meal_amount":  100,
+                              "accom_amount":  ""
+                          },
+                          {
+                              "employee_name":  "Cris Taglucop",
+                              "department":  "Technical",
+                              "area":  "PROVINCIAL",
+                              "meal_amount":  150,
+                              "accom_amount":  ""
+                          }
+                      ],
+    "midnight":  [
+                     {
+                         "label":  "8PM-12AM",
+                         "from_hour":  20,
+                         "from_min":  0,
+                         "to_hour":  23,
+                         "to_min":  59,
+                         "amount":  50
+                     },
+                     {
+                         "label":  "9PM-3AM",
+                         "from_hour":  21,
+                         "from_min":  0,
+                         "to_hour":  3,
+                         "to_min":  0,
+                         "amount":  100
+                     },
+                     {
+                         "label":  "3AM+",
+                         "from_hour":  3,
+                         "from_min":  1,
+                         "to_hour":  6,
+                         "to_min":  0,
+                         "amount":  150
+                     }
+                 ],
+    "ltfrb":  [
+                  {
+                      "vehicle_type":  "Traditional Jeepney",
+                      "base_fare":  14,
+                      "base_km":  4,
+                      "per_km":  2
+                  },
+                  {
+                      "vehicle_type":  "Modern Jeepney",
+                      "base_fare":  17,
+                      "base_km":  4,
+                      "per_km":  2.4
+                  },
+                  {
+                      "vehicle_type":  "Ordinary City Bus",
+                      "base_fare":  15,
+                      "base_km":  5,
+                      "per_km":  2.49
+                  },
+                  {
+                      "vehicle_type":  "Aircon City Bus",
+                      "base_fare":  18,
+                      "base_km":  5,
+                      "per_km":  2.98
+                  }
+              ],
+    "config":  [
+                   {
+                       "key":  "attendance_csv_url",
+                       "value":  "https://docs.google.com/spreadsheets/d/e/2PACX-1vRZHyqa-jPGZYgystWjoXi8nG1TCvmodSqXT675cY4xpA5jpWWVw-lYSBoLSbgWS0LNHgvyXxLcgZWt/pub?output=csv"
+                   },
+                   {
+                       "key":  "standard_hours",
+                       "value":  8
+                   },
+                   {
+                       "key":  "fraud_tolerance_pct",
+                       "value":  20
+                   },
+                   {
+                       "key":  "period_start",
+                       "value":  "2026-06-11"
+                   },
+                   {
+                       "key":  "period_end",
+                       "value":  "2026-06-25"
+                   }
+               ]
+}

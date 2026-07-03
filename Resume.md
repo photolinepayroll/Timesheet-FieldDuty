@@ -3,46 +3,45 @@
 > Read this first if picking this project back up in a new session/after a
 > context reset.
 
-## STOP HERE FIRST: one open data issue — Jude Patani's `EmployeeRates` rows don't match his real attendance name
+## STOP HERE FIRST: open data issues for the admin (none are code bugs)
 
-**Not a code bug — a data mismatch, confirmed live, not yet fixed.** While
-investigating why meal allowance "wasn't working" for the admin (turned out
-to be real, unrelated data issues, not the GPS-fallback feature, which was
-already working correctly), this was found:
+1. **Jude Patani's blank `Users.mother_branch`** — verified live 2026-07-03:
+   his period sheet granted ₱150 meal at "Marquee ter" (= Marquee Mall, his
+   mother branch). The mother-branch zeroing rule compares the attendance
+   destination string against `Users.mother_branch`, and his is **blank**, so
+   the rule can never fire; the GPS fallback then classifies the day onto a
+   paying area. Fix in the live Sheet's `Users` tab: set his `mother_branch`
+   to the EXACT destination string the attendance app logs (looks like
+   "Marquee ter" — verify via `getAttendance` first). Check other users for
+   blank `mother_branch` too.
+2. **New broad area names need `AreaCenters` rows** for GPS-fallback
+   classification (they'll never substring-match a real destination):
+   `PROVINCIAL`, `NORTH LUZON`, `SOUTH LUZON`, `VISMIN / MINDANAO`,
+   `VIS/MIN AREA`, `OLONGAPO AREA`, `DAGUPAN AREA`, `BULACAN AREA`,
+   `PAMPANGA AREA`, `LAGUNA AREA`, `BICOL AREA`, `NCR AREA`, `CAVITE AREA`
+   (some may already exist — check the `AreaCenters` tab). Admin adds
+   `area | lat | lng` rows for whichever are missing.
+3. **Two rate-book ambiguities imported with defaults** (2026-07-03 import,
+   confirm with admin): Leah May Legaspi's R. ANTIQUE read "300/150" in the
+   PDF — imported as meal 150 / accom 300 (assumed swapped columns, matching
+   every sibling row); Jorwen Cacho's SM OLONGAPO CENTRAL was ambiguous —
+   imported as meal 150 / accom 0 (matching SM OLONGAPO DOWNTOWN). Also
+   "SM CDO PEMIER" (PDF typo) was imported as "SM CDO PREMIER", and the PDF
+   spells Walter "PUNSALAN" but rows keep the existing "WALTER PUNZALAN" —
+   when he gets a Users account, the name must match the attendance app.
 
-- The real attendance app logs this employee as `"jude H patani"` literally
-  (with middle initial). A `Users` row was briefly added with the WRONG name
-  `"Jude Patani"` (no middle initial), which broke attendance lookup
-  (`handleGetAttendance`'s name filter is exact/case-sensitive) — reverted
-  back to `"jude H patani"`. Department `"Techinical"` → corrected to
-  `"Technical"` (this one was a genuine typo, kept fixed).
-- **Confirmed via live `getRates` check (2026-06-26): his 14 `EmployeeRates`
-  rows still say `"JUDE PATANI"`** (no middle initial). Since
-  `EmployeeRates.employee_name` matching is case-insensitive (commit
-  `4ebc0d0`) but NOT typo/format-insensitive, `"JUDE PATANI"` still does not
-  match `"jude H patani"` — his employee-specific rates have never actually
-  applied. **Needs a manual fix: update all 14 rows' `employee_name` from
-  `"JUDE PATANI"` to `"jude H patani"`** (exact text, case doesn't matter,
-  but the middle initial does) before trusting his rates.
-- **General rule confirmed this session: `Users.name` must always exactly
-  match the literal string the attendance app logs** (case-sensitive, no
-  normalization anywhere in the pipeline) — do not "clean up" a
-  `Users.name` spelling without first checking what the attendance CSV
-  actually has for that person via `getAttendance`, or you will silently
-  break their period sheet (zero rows, no error).
-- **Status as of 2026-07-03: walked the admin through the manual
-  Find-and-Replace fix in the live Sheet (`EmployeeRates` tab, "JUDE
-  PATANI" → "jude H patani", 14 rows) this session, but the conversation
-  moved on to other bugs before getting explicit confirmation it was
-  completed and verified live.** Don't assume this is done — check
-  `getRates` or a live period-sheet generation for Jude Patani before
-  trusting his rates, same as before.
+**RESOLVED (2026-07-03): the Jude Patani `EmployeeRates` name mismatch.**
+The admin's manual fix was confirmed live (`getRates` showed 14 rows under
+`"jude H patani"`), and the 2026-07-03 rate import (below) rewrote his rows
+under the correct name. General rule stands: **`Users.name` must always
+exactly match the literal string the attendance app logs** (case-sensitive,
+no normalization) — check `getAttendance` before "cleaning up" any spelling.
 
 ---
 
-## Status: app is live, expense-only (OT/UT removed), GPS-fallback area classification shipped, real per-employee rate data imported, meal-allowance incomplete-log auto-grant + admin deny override shipped, employee 3-tab self-service dashboard shipped, meal-control batching + clear status indicator shipped, receipt-photo mobile fix + admin receipt viewer/editable-claimed-amount shipped. Eight workstreams below are DONE.
+## Status: app is live, expense-only (OT/UT removed), GPS-fallback area classification shipped, real per-employee rate data imported, meal-allowance incomplete-log auto-grant + admin deny override shipped, employee 3-tab self-service dashboard shipped, meal-control batching + clear status indicator shipped, receipt-photo mobile fix + admin receipt viewer/editable-claimed-amount shipped, 2026-07-03 full rate-book reimport applied live. Nine workstreams below are DONE.
 
-Eight big things shipped, all committed:
+Nine big things shipped, all committed:
 
 1. **Removed OT/UT/Offset entirely** — the app is now expense-only (fare,
    meal, accommodation, midnight allowance). Also fixed a real live bug
@@ -115,6 +114,27 @@ Eight big things shipped, all committed:
      omit the field on reject).
    Commit `d2b7964`. **The `Code.gs` change needs a manual redeploy
    before it takes effect live** — see "What's deployed right now".
+   (Redeploy was completed by the admin on 2026-07-03, verified live.)
+9. **2026-07-03 full rate-book reimport, applied LIVE** — admin supplied two
+   PDFs ("Meal Allowance Page1/Page2"); the live `EmployeeRates` table was
+   fully replaced via the app's own `saveRates` API (no code changes needed —
+   the position-based Head Office rates map to named-employee rows).
+   Now 245 rows: 38 named employees + 5 dept fallbacks. Admin decisions:
+   Page 2's TECHNICAL section wins over Page 1's conflicting tables for the
+   six Technical employees; the 8 employees absent from the PDFs (Carol
+   Beltran, Christian Caidoy, Jay Mark de Sahagun, Jiel Lumanta, Maricel
+   Cayacap, Raymond Meniano, Robert Mendoza, Shaira Mae Mendoza) keep their
+   prior rows verbatim; the Head Office STAFF table became the HR + ComTech
+   + Technical dept fallbacks; Auditing + CARPENTERS got their own PDF
+   tables. Officers imported as employee rows: Senior (Sally Borbon, Grace
+   Escanlar, Cris Taglucop, Theresa Asumbrado — NCR 100, PROVINCIAL 300/500),
+   Junior (Louwin Celis, Lanilyn Balane, Anthony Dimasuhid — NCR 100,
+   PROVINCIAL 300/400). MidnightRates verified unchanged (50/100/150).
+   Pre-import backup: `Md files/2026-07-03-rates-backup-before-import.json`
+   (177 rows). Verified live: row count, 13 spot checks, retained-8
+   byte-identical, ₱ rates on jude H patani's real period sheet. See "STOP
+   HERE FIRST" for the ambiguities imported with defaults + AreaCenters
+   follow-ups.
 
 ---
 
@@ -380,19 +400,17 @@ d150af2 feat: remove OT/UT/Offset computation, descope app to expense-only
   `MidnightRates`, `LTFRBRates`, `Claims`, `Config`, `RawRateImport`
   (scratch staging, reused each bulk-import — admin's call whether to keep
   as audit trail).
-- **Live Apps Script Web App** — two `Code.gs` changes are committed
-  locally but **not yet redeployed** to the live Web App (one manual
-  redeploy picks up both at once: paste current `Code.gs` into the Apps
-  Script editor → Deploy → Manage deployments → New version → Deploy,
-  same URL as always):
-  1. Workstream 5's `claim_details` per row in `handleGetPeriodSheet` —
-     needed before `index.html`'s My Sheet tab shows real FROM/TO/MODE data.
-  2. Workstream 8's `handleApproveClaim` change — writes the admin's
-     corrected `claimed_amount` on Approve. Until redeployed, editing the
-     amount in `admin.html`'s Claims queue and clicking Approve will NOT
-     actually save the correction (the UI will look like it worked, but
-     the live backend silently ignores the new field).
-  `app.js`'s `SCRIPT_URL` is now **committed to git** (real URL in the
+- **Live Apps Script Web App** — **fully up to date as of 2026-07-03.**
+  The admin completed the manual redeploy (verified live: `doGet` answers
+  JSON over GET), which picked up everything that had been pending:
+  workstream 5's `claim_details`, workstream 8's `handleApproveClaim`
+  corrected-amount write, and the GET-routing/CORS fix (`doGet` +
+  `HANDLERS` dispatch, commit `3267339` — read-only actions now go over
+  GET because Apps Script POST responses inconsistently carry the CORS
+  header for GitHub Pages). Any future `Code.gs` edit needs the same
+  manual redeploy: paste into the Apps Script editor → Deploy → Manage
+  deployments → New version → Deploy, same URL as always.
+  `app.js`'s `SCRIPT_URL` is **committed to git** (real URL in the
   repo) to enable GitHub Pages hosting — this is a change from prior
   convention where it was kept uncommitted.
 - **GitHub Pages** — repo pushed to `github.com/photolinepayroll/Timesheet-FieldDuty`
