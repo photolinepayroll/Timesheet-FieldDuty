@@ -44,6 +44,15 @@ Same URL every time (already in `app.js`).
 Frontend changes (`index.html`, `admin.html`, `app.js`, `style.css`) only
 need a `git push origin master:main` — GitHub Pages auto-redeploys.
 
+**Known hiccup (seen 2026-07-03):** GitHub's own Pages deploy step can fail
+with a generic `Error: Deployment failed, try again later.` even though the
+build step succeeded and the source is correctly set to "GitHub Actions" —
+this is GitHub-side, not a repo config problem. If the live site is stale,
+check `github.com/<repo>/actions` (not just Settings → Pages, which only
+shows the last *successful* deploy). A stuck `queued` run can be slow to
+cancel; don't fight it — a fresh push usually supersedes/cancels it via the
+Pages workflow's built-in concurrency group.
+
 ## Key conventions
 
 - `sheetToObjects(tabName)` — per-request cache, reset at top of every `doPost`
