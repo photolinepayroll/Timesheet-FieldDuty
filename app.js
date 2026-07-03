@@ -9,7 +9,20 @@ function api(action, params, cb) {
     method: 'POST',
     body: JSON.stringify(body)
   })
-  .then(function(r) { return r.json(); })
+  .then(function(r) {
+    return r.text().then(function(text) {
+      try {
+        return JSON.parse(text);
+      } catch (parseErr) {
+        throw new Error(
+          'Server returned an unexpected response instead of JSON — the ' +
+          'Apps Script Web App may need to be redeployed, or its access ' +
+          'permission may not be set to "Anyone". (Raw response started ' +
+          'with: ' + text.slice(0, 60) + ')'
+        );
+      }
+    });
+  })
   .then(function(data) {
     if (!data.ok) { cb(new Error(data.error), null); return; }
     cb(null, data.data);
