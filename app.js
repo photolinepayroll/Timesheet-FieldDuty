@@ -12,7 +12,8 @@ var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1nwaPJuGeqYQOFu9Jwre
 // Must mirror Code.gs's HANDLERS `get: true` list.
 var GET_ACTIONS = {
   ping: true, login: true, getUsers: true, getRates: true,
-  getAttendance: true, getConfig: true, getClaims: true, getPeriodSheet: true
+  getAttendance: true, getConfig: true, getClaims: true, getPeriodSheet: true,
+  checkNameMatches: true
 };
 
 function api(action, params, cb) {

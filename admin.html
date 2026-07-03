@@ -6,6 +6,12 @@
   <title>Photoline Expense — Admin</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧾</text></svg>">
   <link rel="stylesheet" href="style.css">
+  <style>
+    .match-badge { padding:2px 10px; border-radius:12px; font-size:.82em; font-weight:600; display:inline-block; }
+    .match-ok    { background:#d4f7d4; color:#1a6e1a; }
+    .match-warn  { background:#fff3cd; color:#7a5a00; }
+    .match-bad   { background:#ffd6d6; color:#8b0000; }
+  </style>
 </head>
 <body>
   <div style="max-width:1100px;margin:0 auto;padding:16px;">
@@ -26,7 +32,10 @@
     <div id="tab-employees" class="tab-panel">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div class="section-title">Employee Profiles</div>
-        <button onclick="openUserForm(null)">+ Add Employee</button>
+        <div style="display:flex;gap:8px;">
+          <button id="btn-check-names" onclick="checkNameMatches()">Check Name Matches</button>
+          <button onclick="openUserForm(null)">+ Add Employee</button>
+        </div>
       </div>
       <div class="table-scroll">
         <table id="users-table">
@@ -37,6 +46,8 @@
           <tbody id="users-tbody"></tbody>
         </table>
       </div>
+
+      <div id="name-match-results" style="margin-top:16px;"></div>
 
       <!-- User form (hidden until opened) -->
       <div id="user-form-wrap" style="display:none;background:#f9f9f9;padding:16px;margin-top:16px;border:1px solid #ddd;border-radius:6px;">
@@ -200,6 +211,40 @@
             '<td><button onclick="openUserForm(' + JSON.stringify(u).replace(/"/g,"'") + ')">Edit</button></td>';
           tbody.appendChild(tr);
         });
+      });
+    }
+
+    var ATTENDANCE_BADGE = {
+      'exact':     { cls: 'match-ok',   label: 'Exact' },
+      'case-only': { cls: 'match-warn', label: 'Case-only match' },
+      'none':      { cls: 'match-bad',  label: 'No attendance found' }
+    };
+    var RATES_BADGE = {
+      'employee':      { cls: 'match-ok',   label: 'Employee-specific' },
+      'dept-fallback': { cls: 'match-warn', label: 'Dept fallback only' },
+      'none':          { cls: 'match-bad',  label: 'No rates' }
+    };
+
+    function checkNameMatches() {
+      var btn = document.getElementById('btn-check-names');
+      btn.disabled = true;
+      btn.textContent = 'Checking…';
+      api('checkNameMatches', {}, function(err, result) {
+        btn.disabled = false;
+        btn.textContent = 'Check Name Matches';
+        if (err) { alert(err.message); return; }
+        var html = '<table><thead><tr>' +
+          '<th>Name</th><th>Dept</th><th>Attendance</th><th>Rates</th>' +
+          '</tr></thead><tbody>';
+        result.rows.forEach(function(r) {
+          var a = ATTENDANCE_BADGE[r.attendance_status];
+          var rt = RATES_BADGE[r.rates_status];
+          html += '<tr><td>' + r.name + '</td><td>' + r.department + '</td>' +
+            '<td><span class="match-badge ' + a.cls + '">' + a.label + '</span></td>' +
+            '<td><span class="match-badge ' + rt.cls + '">' + rt.label + '</span></td></tr>';
+        });
+        html += '</tbody></table>';
+        document.getElementById('name-match-results').innerHTML = html;
       });
     }
 

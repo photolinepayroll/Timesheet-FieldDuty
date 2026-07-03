@@ -85,7 +85,8 @@ var HANDLERS = {
   'getClaims':        { fn: handleGetClaims,       get: true  },
   'approveClaim':     { fn: handleApproveClaim,    get: false },
   'getPeriodSheet':   { fn: handleGetPeriodSheet,  get: true  },
-  'toggleMealDenial': { fn: handleToggleMealDenial, get: false }
+  'toggleMealDenial': { fn: handleToggleMealDenial, get: false },
+  'checkNameMatches': { fn: handleCheckNameMatches, get: true  }
 };
 
 function doGet(e) {
@@ -168,6 +169,54 @@ function handleSaveUser(payload) {
     sh.appendRow(rowFromUser(payload.user));
   }
   return payload.user.id;
+}
+
+// Audit tool for the admin Employees tab: surfaces two previously-invisible
+// mismatch classes that silently zero out an employee's data (no error,
+// just 0 rows / ₱0 rates) — see Resume.md "STOP HERE FIRST" for the Jude
+// Patani incident that motivated this. View-only; the admin still fixes
+// mismatches through the existing Users/EmployeeRates edit forms.
+function handleCheckNameMatches(payload) {
+  var users = sheetToObjects('Users');
+
+  // handleGetAttendance's name filter (used by every period-sheet lookup)
+  // is exact/case-sensitive, so that's what 'exact' below checks for. The
+  // lowercased set only tells us whether a case-only typo is the culprit.
+  var attRecords = handleGetAttendance({});
+  var exactNames = {};
+  var lowerNames = {};
+  attRecords.forEach(function(r) {
+    exactNames[r.name] = true;
+    lowerNames[r.name.toLowerCase()] = true;
+  });
+
+  var rates = sheetToObjects('EmployeeRates');
+
+  return {
+    rows: users.map(function(u) {
+      var attendance_status = exactNames[u['name']] ? 'exact' :
+        (lowerNames[String(u['name']).toLowerCase()] ? 'case-only' : 'none');
+
+      var hasEmployeeRate = rates.some(function(r) {
+        return (!r['department'] || r['department'] === '') &&
+               namesMatch(r['employee_name'], u['name']);
+      });
+      var hasDeptFallback = rates.some(function(r) {
+        return (!r['employee_name'] || r['employee_name'] === '') &&
+               r['department'] === u['department'];
+      });
+      var rates_status = hasEmployeeRate ? 'employee' :
+        (hasDeptFallback ? 'dept-fallback' : 'none');
+
+      return {
+        name: u['name'],
+        department: u['department'],
+        active: u['active'],
+        attendance_status: attendance_status,
+        rates_status: rates_status
+      };
+    })
+  };
 }
 
 function handleGetRates(payload) {
