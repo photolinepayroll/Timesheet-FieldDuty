@@ -62,32 +62,52 @@ function claimDateKey(v) {
   return String(v).slice(0, 10);
 }
 
+// Single source of truth for action dispatch, shared by doGet and doPost.
+// `get: true` marks actions safe to expose over GET: read-only, and their
+// request payload is always a few short strings (never a base64 photo or a
+// full rate-table replace) so it fits in a URL query string. Apps Script's
+// /exec responses inconsistently carry the Access-Control-Allow-Origin
+// header on POST (cross-origin fetch() from GitHub Pages can get silently
+// CORS-blocked even though the request succeeded server-side), but GET
+// responses carry it reliably — so reads go via GET to dodge that, while
+// writes stay POST since some payloads (saveClaim's receipt photos,
+// saveRates' full-table replace) are too large for a query string.
+var HANDLERS = {
+  'ping':             { fn: handlePing,            get: true  },
+  'login':            { fn: handleLogin,           get: true  },
+  'getUsers':         { fn: handleGetUsers,        get: true  },
+  'saveUser':         { fn: handleSaveUser,        get: false },
+  'getRates':         { fn: handleGetRates,        get: true  },
+  'saveRates':        { fn: handleSaveRates,       get: false },
+  'getAttendance':    { fn: handleGetAttendance,   get: true  },
+  'saveClaim':        { fn: handleSaveClaim,       get: false },
+  'getConfig':        { fn: handleGetConfig,       get: true  },
+  'getClaims':        { fn: handleGetClaims,       get: true  },
+  'approveClaim':     { fn: handleApproveClaim,    get: false },
+  'getPeriodSheet':   { fn: handleGetPeriodSheet,  get: true  },
+  'toggleMealDenial': { fn: handleToggleMealDenial, get: false }
+};
+
 function doGet(e) {
-  return HtmlService.createHtmlOutput('Photoline Expense App API running.');
+  if (!e || !e.parameter || !e.parameter.action) {
+    return HtmlService.createHtmlOutput('Photoline Expense App API running.');
+  }
+  var payload = {};
+  for (var key in e.parameter) payload[key] = e.parameter[key];
+  return runAction(payload.action, payload, /* viaGet */ true);
 }
 
 function doPost(e) {
+  var payload = JSON.parse(e.postData.contents);
+  return runAction(payload.action, payload, /* viaGet */ false);
+}
+
+function runAction(action, payload, viaGet) {
   clearSheetCache();
   try {
-    var payload = JSON.parse(e.postData.contents);
-    var action = payload.action;
-    var handlers = {
-      'ping': handlePing,
-      'login': handleLogin,
-      'getUsers': handleGetUsers,
-      'saveUser': handleSaveUser,
-      'getRates': handleGetRates,
-      'saveRates': handleSaveRates,
-      'getAttendance': handleGetAttendance,
-      'saveClaim': handleSaveClaim,
-      'getConfig': handleGetConfig,
-      'getClaims': handleGetClaims,
-      'approveClaim': handleApproveClaim,
-      'getPeriodSheet': handleGetPeriodSheet,
-      'toggleMealDenial': handleToggleMealDenial
-    };
-    if (!handlers[action]) throw new Error('Unknown action: ' + action);
-    var result = handlers[action](payload);
+    var entry = HANDLERS[action];
+    if (!entry || (viaGet && !entry.get)) throw new Error('Unknown action: ' + action);
+    var result = entry.fn(payload);
     return ContentService
       .createTextOutput(JSON.stringify({ ok: true, data: result }))
       .setMimeType(ContentService.MimeType.JSON);
