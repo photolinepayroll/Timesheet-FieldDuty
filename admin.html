@@ -113,6 +113,7 @@
         </button>
         <button onclick="printPeriodSheet()" style="padding:8px 18px;">🖨 Print</button>
         <button onclick="exportPeriodCSV(window._lastPeriodSheet)" style="padding:8px 18px;">⬇ Export CSV</button>
+        <button id="save-meal-btn" onclick="saveMealChanges()" style="padding:8px 18px;display:none;">💾 Save Meal Changes</button>
       </div>
 
       <div id="period-sheet-output"></div>
@@ -125,20 +126,33 @@
     window.addEventListener('DOMContentLoaded', function() {
       var user = requireLogin('head');
       if (!user) return;
+      window._pendingMealChanges = {};
       loadUsers();
       initTabs();
       document.getElementById('period-sheet-output').addEventListener('click', function(ev) {
         var btn = ev.target.closest('.meal-deny-btn');
         if (!btn) return;
-        var u = currentUser();
-        api('toggleMealDenial', {
-          employee_name: window._lastPeriodSheet.employee.name,
-          date: btn.dataset.date,
-          denied_by: u.name
-        }, function(err) {
-          if (err) { alert(err.message); return; }
-          generatePeriodSheet(); // re-fetch and re-render to reflect the new state
-        });
+        // Flip the button's own label only — no server call here. The
+        // actual toggleMealDenial writes are batched up and sent when the
+        // admin clicks "Save Meal Changes", since round-tripping (and the
+        // subsequent full period-sheet re-fetch) on every single click was
+        // too slow for reviewing a whole sheet's rows in sequence.
+        var date = btn.dataset.date;
+        var nowDenied = btn.dataset.denied !== 'true'; // flip
+        btn.dataset.denied = nowDenied;
+        btn.textContent = nowDenied ? 'Allow Meal' : 'Deny Meal';
+        btn.style.background = nowDenied ? '#b00020' : '#1a1a2e';
+        var statusEl = document.querySelector('[data-status-for="' + date + '"]');
+        if (statusEl) {
+          statusEl.textContent = nowDenied ? 'DENIED' : 'ALLOWED';
+          statusEl.style.color = nowDenied ? '#b00020' : '#0a7d2c';
+        }
+        if (window._pendingMealChanges[date]) {
+          delete window._pendingMealChanges[date]; // toggled back to original state
+        } else {
+          window._pendingMealChanges[date] = true;
+        }
+        updateSaveMealButton();
       });
     });
 
@@ -567,6 +581,8 @@
 
       var out = document.getElementById('period-sheet-output');
       out.innerHTML = '<p>Loading…</p>';
+      window._pendingMealChanges = {};
+      updateSaveMealButton();
 
       api('getPeriodSheet', { employee_name: emp, period_start: start, period_end: end },
         function(err, sheet) {
@@ -575,6 +591,37 @@
           out.innerHTML = renderPeriodSheet(sheet, { adminControls: true });
         }
       );
+    }
+
+    function updateSaveMealButton() {
+      var btn = document.getElementById('save-meal-btn');
+      var count = Object.keys(window._pendingMealChanges).length;
+      btn.style.display = count ? 'inline-block' : 'none';
+      btn.textContent = '💾 Save Meal Changes (' + count + ')';
+    }
+
+    function saveMealChanges() {
+      var dates = Object.keys(window._pendingMealChanges);
+      if (!dates.length) return;
+      var u = currentUser();
+      var empName = window._lastPeriodSheet.employee.name;
+      var btn = document.getElementById('save-meal-btn');
+      btn.disabled = true;
+      var remaining = dates.length;
+      var errors = [];
+      dates.forEach(function(date) {
+        api('toggleMealDenial', { employee_name: empName, date: date, denied_by: u.name },
+          function(err) {
+            if (err) errors.push(date + ': ' + err.message);
+            remaining--;
+            if (remaining === 0) {
+              btn.disabled = false;
+              if (errors.length) alert('Some meal changes failed to save:\n' + errors.join('\n'));
+              generatePeriodSheet(); // refresh once, shows the saved server state + updated totals
+            }
+          }
+        );
+      });
     }
 
     function printPeriodSheet() {

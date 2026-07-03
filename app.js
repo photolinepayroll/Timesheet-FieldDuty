@@ -157,8 +157,19 @@ function renderPeriodSheet(sheet, opts) {
         // employee-authored free text), but it's escaped anyway for the
         // attribute value per this file's existing convention.
         if (r.meal > 0 || r.meal_denied) {
-          html += '<td><button class="meal-deny-btn" data-date="' + escapeHtml(r.date) + '">' +
-            (r.meal_denied ? 'Allow Meal' : 'Deny Meal') + '</button></td>';
+          // Button label is the ACTION ("Allow Meal" reverses a denial), not
+          // the current status — easy to misread as "meal is allowed" when
+          // a row is actually denied. The colored status word in front of it
+          // (and the button's own background color) is the actual state
+          // indicator; the button text alone should never be relied on.
+          html += '<td>' +
+            '<span data-status-for="' + escapeHtml(r.date) + '" style="font-weight:bold;color:' + (r.meal_denied ? '#b00020' : '#0a7d2c') + ';margin-right:6px;">' +
+              (r.meal_denied ? 'DENIED' : 'ALLOWED') +
+            '</span>' +
+            '<button class="meal-deny-btn" data-date="' + escapeHtml(r.date) + '" data-denied="' + !!r.meal_denied + '" ' +
+              'style="background:' + (r.meal_denied ? '#b00020' : '#1a1a2e') + ';">' +
+              (r.meal_denied ? 'Allow Meal' : 'Deny Meal') +
+            '</button></td>';
         } else {
           html += '<td></td>';
         }
