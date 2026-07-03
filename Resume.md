@@ -39,9 +39,9 @@ no normalization) — check `getAttendance` before "cleaning up" any spelling.
 
 ---
 
-## Status: app is live, expense-only (OT/UT removed), GPS-fallback area classification shipped, real per-employee rate data imported, meal-allowance incomplete-log auto-grant + admin deny override shipped, employee 3-tab self-service dashboard shipped, meal-control batching + clear status indicator shipped, receipt-photo mobile fix + admin receipt viewer/editable-claimed-amount shipped, 2026-07-03 full rate-book reimport applied live. Nine workstreams below are DONE.
+## Status: app is live, expense-only (OT/UT removed), GPS-fallback area classification shipped, real per-employee rate data imported, meal-allowance incomplete-log auto-grant + admin deny override shipped, employee 3-tab self-service dashboard shipped, meal-control batching + clear status indicator shipped, receipt-photo mobile fix + admin receipt viewer/editable-claimed-amount shipped, 2026-07-03 full rate-book reimport applied live, admin Check Name Matches audit tool shipped. Ten workstreams below are DONE.
 
-Nine big things shipped, all committed:
+Ten big things shipped, all committed:
 
 1. **Removed OT/UT/Offset entirely** — the app is now expense-only (fare,
    meal, accommodation, midnight allowance). Also fixed a real live bug
@@ -135,6 +135,24 @@ Nine big things shipped, all committed:
    byte-identical, ₱ rates on jude H patani's real period sheet. See "STOP
    HERE FIRST" for the ambiguities imported with defaults + AreaCenters
    follow-ups.
+10. **Admin "Check Name Matches" audit tool** — new read-only
+    `checkNameMatches` action (`Code.gs`) + button in admin.html's
+    Employees tab. Cross-checks every `Users` row against the attendance
+    CSV's names (exact/case-only/none — mirrors `handleGetAttendance`'s
+    real case-sensitive filter) and against `EmployeeRates.employee_name`
+    (employee-specific/dept-fallback/none — mirrors `namesMatch()` +
+    `resolveEmployeeRate`'s fallback logic). Built specifically so the Jude
+    Patani-style mismatch (silent 0-row/₱0-rate failure, no error shown)
+    gets caught proactively instead of discovered per-incident. View-only —
+    admin still fixes mismatches via the existing Users/EmployeeRates
+    forms. Logic verified by replicating it in a script against real live
+    `getUsers`/`getRates`/`getAttendance` data before commit — correctly
+    flagged `jude H patani` as exact/employee, `Emmerson` as
+    exact/dept-fallback, and incidentally surfaced that **`ANN CHRISTINE
+    JOY TRIA`'s `Users.department` is blank** (she has no attendance
+    records yet either — likely a new hire not fully set up). Commit
+    `7e3a4a8`. **Needs the same pending manual Code.gs redeploy as always**
+    before it's usable live.
 
 ---
 
@@ -400,7 +418,9 @@ d150af2 feat: remove OT/UT/Offset computation, descope app to expense-only
   `MidnightRates`, `LTFRBRates`, `Claims`, `Config`, `RawRateImport`
   (scratch staging, reused each bulk-import — admin's call whether to keep
   as audit trail).
-- **Live Apps Script Web App** — **fully up to date as of 2026-07-03.**
+- **Live Apps Script Web App** — up to date as of the 2026-07-03 redeploy,
+  **except workstream 10 (`checkNameMatches`) which is committed but not
+  yet redeployed** — same manual redeploy step as always.
   The admin completed the manual redeploy (verified live: `doGet` answers
   JSON over GET), which picked up everything that had been pending:
   workstream 5's `claim_details`, workstream 8's `handleApproveClaim`

@@ -61,7 +61,9 @@ need a `git push origin master:main` — GitHub Pages auto-redeploys.
 2. **AreaCenters rows missing for broad area names** from the 2026-07-03 rate import (PROVINCIAL, NORTH/SOUTH LUZON, VISMIN / MINDANAO, OLONGAPO/DAGUPAN/BULACAN/PAMPANGA/LAGUNA/BICOL AREA, …) — without them the GPS fallback can't classify those areas. Admin adds `area | lat | lng` rows.
 3. **Two rate values imported on assumption** (see Resume.md "STOP HERE FIRST"): Leah May Legaspi R. ANTIQUE 150/300 (PDF looked column-swapped), Jorwen Cacho SM OLONGAPO CENTRAL 150/0 (PDF ambiguous). Confirm with admin.
 
-Resolved 2026-07-03: Jude Patani EmployeeRates name mismatch (fixed live + reimported); Code.gs redeploy completed (claim_details, approve-amount write, GET/CORS routing all live). Live EmployeeRates = 245 rows from the 2026-07-03 rate-book import; pre-import backup in `Md files/2026-07-03-rates-backup-before-import.json`.
+4. **Code.gs redeploy pending again** — workstream 10 (`checkNameMatches` admin audit tool) is committed but the live Web App doesn't have it yet.
+
+Resolved 2026-07-03: Jude Patani EmployeeRates name mismatch (fixed live + reimported); prior Code.gs redeploy completed (claim_details, approve-amount write, GET/CORS routing all live). Live EmployeeRates = 245 rows from the 2026-07-03 rate-book import; pre-import backup in `Md files/2026-07-03-rates-backup-before-import.json`.
 
 ## Do not re-ask these decisions
 
