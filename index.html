@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Photoline Expense</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧾</text></svg>">
   <link rel="stylesheet" href="style.css">
   <style>
     .emp-tabs { display:flex; gap:6px; margin-bottom:18px; flex-wrap:wrap; }
@@ -106,8 +107,17 @@
         var name = document.getElementById('inp-name').value.trim();
         var pin  = document.getElementById('inp-pin').value.trim();
         if (!name || !pin) { document.getElementById('login-error').textContent = 'Enter name and PIN.'; return; }
+        var btn = document.getElementById('btn-login');
+        btn.disabled = true;
+        btn.textContent = 'Logging in…';
+        document.getElementById('login-error').textContent = '';
         login(name, pin, function(err, user) {
-          if (err) { document.getElementById('login-error').textContent = err.message; return; }
+          if (err) {
+            btn.disabled = false;
+            btn.textContent = 'Login';
+            document.getElementById('login-error').textContent = err.message;
+            return;
+          }
           if (user.role === 'head') { window.location.href = 'admin.html'; return; }
           document.getElementById('login-view').style.display   = 'none';
           document.getElementById('employee-view').style.display = 'block';
