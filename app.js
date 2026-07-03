@@ -3,12 +3,31 @@
 var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1nwaPJuGeqYQOFu9Jwre5AzgnPMkJp8wWdSwgi-U9YTCiB_ZvAJ6juoGSv3JfwmKxKQ/exec';
 
 // ---- API ----
+// Read-only actions go via GET (query string) instead of POST: Apps Script's
+// /exec responses inconsistently carry Access-Control-Allow-Origin on POST,
+// so cross-origin fetch() from GitHub Pages can get silently CORS-blocked
+// even when the request succeeded server-side — GET responses carry that
+// header reliably. Writes stay POST since some payloads (saveClaim's
+// receipt photos, saveRates' full-table replace) are too large for a URL.
+// Must mirror Code.gs's HANDLERS `get: true` list.
+var GET_ACTIONS = {
+  ping: true, login: true, getUsers: true, getRates: true,
+  getAttendance: true, getConfig: true, getClaims: true, getPeriodSheet: true
+};
+
 function api(action, params, cb) {
   var body = Object.assign({ action: action }, params || {});
-  fetch(SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify(body)
-  })
+  var useGet = !!GET_ACTIONS[action];
+  var url = SCRIPT_URL;
+  var opts = { method: 'POST', body: JSON.stringify(body) };
+  if (useGet) {
+    var qs = Object.keys(body).map(function(k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(body[k]);
+    }).join('&');
+    url = SCRIPT_URL + '?' + qs;
+    opts = { method: 'GET' };
+  }
+  fetch(url, opts)
   .then(function(r) {
     return r.text().then(function(text) {
       try {
