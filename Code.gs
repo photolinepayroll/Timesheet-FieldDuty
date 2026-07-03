@@ -490,6 +490,7 @@ function handleApproveClaim(payload) {
   var approverIdx  = headers.indexOf('approver_name');
   var approvedAtIdx = headers.indexOf('approved_at');
   var notesIdx  = headers.indexOf('notes');
+  var claimedAmtIdx = headers.indexOf('claimed_amount');
 
   for (var i = 1; i < rows.length; i++) {
     if (rows[i][idIdx] === payload.claim_id) {
@@ -499,6 +500,13 @@ function handleApproveClaim(payload) {
       sh.getRange(i+1, approverIdx+1).setValue(payload.approver_name);
       sh.getRange(i+1, approvedAtIdx+1).setValue(new Date().toISOString());
       if (payload.notes) sh.getRange(i+1, notesIdx+1).setValue(payload.notes);
+      // Admin may have corrected the submitted amount before approving —
+      // gated on decision === 'approve' here too (not just trusting the
+      // client to omit the field on reject), so a rejected claim's amount
+      // is never touched even if the payload shape changes later.
+      if (payload.decision === 'approve' && payload.claimed_amount !== undefined && payload.claimed_amount !== '') {
+        sh.getRange(i+1, claimedAmtIdx+1).setValue(Number(payload.claimed_amount));
+      }
       return 'done';
     }
   }

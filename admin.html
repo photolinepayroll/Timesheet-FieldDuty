@@ -84,7 +84,7 @@
           <thead><tr>
             <th>Employee</th><th>Date</th><th>Type</th>
             <th>From</th><th>To</th><th>Mode</th>
-            <th>Computed</th><th>Claimed</th>
+            <th>Computed</th><th>Claimed</th><th>Receipt</th>
             <th>GPS</th><th>Status</th><th>Notes</th><th>Actions</th>
           </tr></thead>
           <tbody id="claims-tbody"></tbody>
@@ -117,6 +117,17 @@
       </div>
 
       <div id="period-sheet-output"></div>
+    </div>
+  </div>
+
+  <!-- Receipt photo viewer overlay (shared across tabs) -->
+  <div id="receipt-modal" onclick="if (event.target === this) closeReceiptModal();"
+       style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:1000;align-items:center;justify-content:center;">
+    <div style="position:relative;max-width:90vw;max-height:90vh;">
+      <button onclick="closeReceiptModal()"
+              style="position:absolute;top:-36px;right:0;background:#fff;border:none;border-radius:3px;padding:6px 12px;cursor:pointer;">✕ Close</button>
+      <img id="receipt-modal-img" src="" alt="Receipt"
+           style="max-width:90vw;max-height:90vh;display:block;border-radius:4px;">
     </div>
   </div>
 
@@ -505,8 +516,9 @@
         if (err) { alert(err.message); return; }
         var tbody = document.getElementById('claims-tbody');
         tbody.innerHTML = '';
+        window._lastClaims = claims; // keyed lookup for viewReceipt(), avoids inlining base64 into onclick
         if (!claims.length) {
-          tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;">No pending claims.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;">No pending claims.</td></tr>';
           return;
         }
         claims.forEach(function(c) {
@@ -519,7 +531,13 @@
             '<td>' + escapeHtml(c.to_loc) + '</td>' +
             '<td>' + escapeHtml(c.vehicle_mode) + '</td>' +
             '<td>' + formatCurrency(c.computed_amount) + '</td>' +
-            '<td>' + formatCurrency(c.claimed_amount) + '</td>' +
+            // Editable so the admin can correct a wrong submitted amount
+            // before approving; value is numeric (not employee-authored
+            // free text), so plain interpolation matches this file's
+            // existing formatCurrency()-not-escapeHtml() convention for
+            // amount fields.
+            '<td><input type="number" class="claim-amount-input" data-claim-id="' + c.id + '" value="' + Number(c.claimed_amount || 0) + '" style="width:80px;padding:3px;"></td>' +
+            '<td>' + (c.receipt_url ? '<button onclick="viewReceipt(\'' + c.id + '\')" style="padding:4px 8px;">📷 View</button>' : '—') + '</td>' +
             '<td><span class="badge-' + (c.gps_check==='ok'?'auto':'flagged') + '">' + escapeHtml(c.gps_check) + '</span></td>' +
             '<td><span class="badge-pending">' + escapeHtml(c.status) + '</span></td>' +
             '<td>' + escapeHtml(c.notes) + '</td>' +
@@ -547,15 +565,35 @@
       // keys on top of {action: 'approveClaim'} (the dispatch key), so a
       // same-named "action" key here would silently overwrite the dispatch
       // value before doPost ever sees it, breaking the request entirely.
-      api('approveClaim', {
+      var payload = {
         claim_id: claimId,
         approver_name: user.name,
         decision: action,
         notes: notes || ''
-      }, function(err) {
+      };
+      // Only Approve carries the (possibly-edited) claimed amount along —
+      // a Reject leaves the originally-submitted amount untouched, since
+      // nothing is being paid out for a rejected claim.
+      if (action === 'approve') {
+        var input = document.querySelector('.claim-amount-input[data-claim-id="' + claimId + '"]');
+        if (input) payload.claimed_amount = Number(input.value);
+      }
+      api('approveClaim', payload, function(err) {
         if (err) { alert(err.message); return; }
         loadClaims(); // refresh
       });
+    }
+
+    function viewReceipt(claimId) {
+      var claim = (window._lastClaims || []).find(function(c) { return c.id === claimId; });
+      if (!claim || !claim.receipt_url) return;
+      document.getElementById('receipt-modal-img').src = claim.receipt_url;
+      document.getElementById('receipt-modal').style.display = 'flex';
+    }
+
+    function closeReceiptModal() {
+      document.getElementById('receipt-modal').style.display = 'none';
+      document.getElementById('receipt-modal-img').src = ''; // drop the base64 payload, don't keep it around in the DOM
     }
 
     // ---- Period Sheets ----
