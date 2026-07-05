@@ -261,9 +261,13 @@ function handleSaveRates(payload) {
 // admin supplied 2026-07-05: 118 real store/mall branches, 6 broad-region
 // representative points, and 8 legacy-area-name rows (reusing an existing
 // nearby store's coordinates) that close the previously-documented
-// "AreaCenters rows missing for broad area names" open issue. PROVINCIAL
-// is deliberately NOT included — no single coordinate is sensible for a
-// literal "any province" fallback name; left as a documented permanent gap.
+// "AreaCenters rows missing for broad area names" open issue, plus 3 more
+// rows added after the first live run of
+// oneTimeStandardizeEmployeeRatesAreas() surfaced real unmatched area
+// names ("NCR BRANCH", "VISAYAS / MINDANAO" — aliases of existing rows;
+// "RIZAL AREA" — new). PROVINCIAL is deliberately NOT included — no
+// single coordinate is sensible for a literal "any province" fallback
+// name; left as a documented permanent gap.
 function oneTimeImportAreaCenters() {
   var sh = getSheet('AreaCenters');
   var headers = ['area', 'lat', 'lng', 'province', 'region'];
@@ -401,7 +405,7 @@ function oneTimeImportAreaCenters() {
     ['VISAYAS', 10.3114191, 123.9178164, '(multiple)', 'VISAYAS'],
     ['MINDANAO', 7.0911904, 125.611299, '(multiple)', 'MINDANAO'],
 
-    // 9 legacy-area-name rows — reuse an existing nearby PDF store's coordinates.
+    // 8 legacy-area-name rows — reuse an existing nearby PDF store's coordinates.
     // PROVINCIAL is intentionally NOT included (see comment above the function).
     ['PAMPANGA AREA', 15.1626197, 120.6098906, 'Pampanga', 'NORTH LUZON'],
     ['OLONGAPO AREA', 14.8370173, 120.282813, 'Zambales', 'NORTH LUZON'],
@@ -410,7 +414,19 @@ function oneTimeImportAreaCenters() {
     ['LAGUNA AREA', 14.2041849, 121.1545856, 'Laguna', 'SOUTH LUZON'],
     ['BICOL AREA', 13.1437617, 123.7438313, 'Albay', 'SOUTH LUZON'],
     ['VIS/MIN AREA', 10.3114191, 123.9178164, 'Cebu', 'VISAYAS'],
-    ['VISMIN / MINDANAO', 10.3114191, 123.9178164, 'Cebu', 'VISAYAS']
+    ['VISMIN / MINDANAO', 10.3114191, 123.9178164, 'Cebu', 'VISAYAS'],
+
+    // 3 rows added 2026-07-05 after the first live run of
+    // oneTimeStandardizeEmployeeRatesAreas() surfaced real unmatched
+    // EmployeeRates.area values in the execution log:
+    // - "NCR BRANCH" and "VISAYAS / MINDANAO" are alternate spellings of
+    //   existing rows above ("NCR AREA" / "VISMIN / MINDANAO") — added as
+    //   aliases (same coordinates) rather than editing EmployeeRates itself.
+    // - "RIZAL AREA" had no AreaCenters row at all — added using a real
+    //   Rizal-province store from the PDF (SM Masinag) as its representative point.
+    ['NCR BRANCH', 14.5856693, 121.0566083, '(multiple)', 'NCR AREA'],
+    ['VISAYAS / MINDANAO', 10.3114191, 123.9178164, 'Cebu', 'VISAYAS'],
+    ['RIZAL AREA', 14.625364, 121.1199172, 'Rizal', 'SOUTH LUZON']
   ];
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
   sh.getRange(2, 1, rows.length, headers.length).setValues(rows);
