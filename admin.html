@@ -59,7 +59,9 @@
         <label>Full Name</label>
         <input id="uf-name" type="text" style="width:100%;padding:7px;margin:4px 0 10px;">
         <label>Department</label>
-        <input id="uf-dept" type="text" style="width:100%;padding:7px;margin:4px 0 10px;">
+        <div id="uf-dept-wrap" style="margin:4px 0 10px;">
+          <input id="uf-dept" type="text" style="width:100%;padding:7px;box-sizing:border-box;">
+        </div>
         <label>Mother Branch</label>
         <input id="uf-branch" type="text" style="width:100%;padding:7px;margin:4px 0 10px;">
         <label>Position Level</label>
@@ -280,13 +282,72 @@
       document.getElementById('user-form-title').textContent = u ? 'Edit Employee' : 'Add Employee';
       document.getElementById('uf-id').value     = u ? u.id : '';
       document.getElementById('uf-name').value   = u ? u.name : '';
-      document.getElementById('uf-dept').value   = u ? u.department : '';
       document.getElementById('uf-branch').value = u ? u.mother_branch : '';
       document.getElementById('uf-level').value  = u ? u.position_level : 'level_1';
       document.getElementById('uf-role').value   = u ? u.role : 'employee';
       document.getElementById('uf-pin').value    = u ? u.pin : '';
       document.getElementById('uf-active').checked = u ? u.active === true || u.active === 'TRUE' : true;
       document.getElementById('uf-msg').textContent = '';
+      setupDepartmentField(u);
+    }
+
+    // Department field is either a plain default text input (employee
+    // already has employee-specific EmployeeRates rows, per
+    // checkNameMatches' rates_status — department doesn't drive their
+    // rate lookup, so free text is harmless) or a dropdown of the real
+    // department names that have fallback rows in EmployeeRates (new
+    // employee, or one relying on department-fallback rates) — same
+    // typo-prevention idea as the Area dropdown added to Rate Tables
+    // (a Users.department that doesn't exactly match an EmployeeRates
+    // fallback row silently zeroes that employee's meal/accom, no error).
+    function setupDepartmentField(u) {
+      var deptValue = u ? u.department : '';
+      api('getRates', {}, function(err, rates) {
+        var fallbackDepts = [];
+        if (!err) {
+          var seen = {};
+          (rates.employeeRates || []).forEach(function(r) {
+            var isFallback = !r['employee_name'] || r['employee_name'] === '';
+            if (isFallback && r['department'] && !seen[r['department']]) {
+              seen[r['department']] = true;
+              fallbackDepts.push(r['department']);
+            }
+          });
+        }
+        if (!u) {
+          // Brand-new employee — no rates_status to check yet (they don't
+          // exist in EmployeeRates at all). Default to the dropdown so a
+          // new hire's department can't be typo'd against the fallback
+          // group they'll actually need.
+          renderDepartmentDropdown(deptValue, fallbackDepts);
+          return;
+        }
+        api('checkNameMatches', {}, function(err2, result) {
+          var row = !err2 && result.rows.filter(function(r) { return r.name === u.name; })[0];
+          if (row && row.rates_status === 'employee') {
+            renderDepartmentPlain(deptValue);
+          } else {
+            renderDepartmentDropdown(deptValue, fallbackDepts);
+          }
+        });
+      });
+    }
+
+    function renderDepartmentPlain(value) {
+      document.getElementById('uf-dept-wrap').innerHTML =
+        '<input id="uf-dept" type="text" value="' + escapeHtml(value) + '" style="width:100%;padding:7px;box-sizing:border-box;">';
+    }
+
+    function renderDepartmentDropdown(value, fallbackDepts) {
+      var opts = fallbackDepts.slice();
+      if (value && opts.indexOf(value) === -1) opts.unshift(value); // preserve an existing value even if it's not a recognized fallback dept, rather than silently discarding it
+      var html = '<select id="uf-dept" style="width:100%;padding:7px;box-sizing:border-box;">';
+      if (!value) html += '<option value="">Select department…</option>';
+      html += opts.map(function(d) {
+        return '<option value="' + escapeHtml(d) + '"' + (d === value ? ' selected' : '') + '>' + escapeHtml(d) + '</option>';
+      }).join('');
+      html += '</select>';
+      document.getElementById('uf-dept-wrap').innerHTML = html;
     }
 
     function saveUser() {
