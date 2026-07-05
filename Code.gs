@@ -417,6 +417,65 @@ function oneTimeImportAreaCenters() {
   return 'AreaCenters rebuilt: ' + rows.length + ' rows';
 }
 
+// One-time backfill (2026-07-05): standardizes EmployeeRates.area spelling
+// to match AreaCenters' canonical casing (case-insensitive lookup only —
+// never reassigns a row to a different area), and adds a new `region`
+// column backfilled from the matched AreaCenters row. Rows with no
+// case-insensitive match are left untouched (area unchanged, region blank)
+// and reported via Logger.log so the admin can review them by hand —
+// same "flag ambiguities, don't guess" convention as the 2026-07-03
+// rate-book import. Run manually once from the Apps Script editor, then
+// delete — not wired into handleSaveRates/ongoing saves.
+function oneTimeStandardizeEmployeeRatesAreas() {
+  var centers = sheetToObjects('AreaCenters');
+  var lookup = {};
+  centers.forEach(function(c) {
+    lookup[String(c['area']).toLowerCase()] = {
+      canonicalArea: c['area'],
+      region: c['region']
+    };
+  });
+
+  var sh = getSheet('EmployeeRates');
+  var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  var areaIdx = headers.indexOf('area');
+  var empIdx = headers.indexOf('employee_name');
+  var deptIdx = headers.indexOf('department');
+  var regionIdx = headers.indexOf('region');
+  if (regionIdx === -1) {
+    regionIdx = headers.length;
+    sh.getRange(1, regionIdx + 1).setValue('region');
+  }
+
+  var lastRow = sh.getLastRow();
+  if (lastRow < 2) return 'no data rows';
+
+  var dataRange = sh.getRange(2, 1, lastRow - 1, Math.max(sh.getLastColumn(), regionIdx + 1));
+  var data = dataRange.getValues();
+  var unmatched = [];
+
+  data.forEach(function(row) {
+    var area = String(row[areaIdx] || '');
+    var match = lookup[area.toLowerCase()];
+    if (match) {
+      if (row[areaIdx] !== match.canonicalArea) row[areaIdx] = match.canonicalArea;
+      row[regionIdx] = match.region;
+    } else {
+      row[regionIdx] = '';
+      unmatched.push((row[empIdx] || row[deptIdx] || '(blank)') + ': "' + area + '"');
+    }
+  });
+
+  dataRange.setValues(data);
+
+  if (unmatched.length) {
+    Logger.log('Unmatched EmployeeRates areas (%s rows), left as-is, region blank:\n%s',
+      unmatched.length, unmatched.join('\n'));
+  }
+  return 'Standardized/backfilled ' + (data.length - unmatched.length) + ' rows, ' +
+    unmatched.length + ' unmatched (see execution log)';
+}
+
 // ============================================================
 // FARE AUTO-COMPUTE — OSRM distance + LTFRB formula
 // ============================================================
