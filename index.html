@@ -62,7 +62,7 @@
           <button onclick="hideClaimForm()" style="background:none;border:none;font-size:1.3em;cursor:pointer;line-height:1;">✕</button>
         </div>
         <label>Date</label>
-        <input id="cl-date" type="date" style="width:100%;padding:7px;margin:4px 0 10px;">
+        <select id="cl-date" style="width:100%;padding:7px;margin:4px 0 10px;"></select>
         <input id="cl-type" type="hidden">
         <div id="cl-fare-fields">
           <label>From</label>
@@ -70,22 +70,29 @@
           <label>To</label>
           <input id="cl-to" type="text" placeholder="Destination" style="width:100%;padding:7px;margin:4px 0 10px;">
           <label>Vehicle / Mode</label>
-          <input id="cl-mode" type="text" placeholder="e.g. Van hire, Taxi, Grab" style="width:100%;padding:7px;margin:4px 0 10px;">
+          <select id="cl-mode" onchange="onModeChange()" style="width:100%;padding:7px;margin:4px 0 10px;">
+            <option value="">Select mode…</option>
+            <option value="Jeepney">Jeepney</option>
+            <option value="Tricycle">Tricycle</option>
+            <option value="Company Service">Company Service</option>
+          </select>
         </div>
         <label>Amount (₱)</label>
         <input id="cl-amount" type="number" min="0" style="width:100%;padding:7px;margin:4px 0 10px;">
         <label>Notes / Justification</label>
         <textarea id="cl-notes" rows="2" style="width:100%;padding:7px;margin:4px 0 10px;"></textarea>
-        <label>Receipt Photo (optional)</label>
-        <input id="cl-receipt" type="file" accept="image/*" style="margin:4px 0 12px;">
+        <div id="cl-receipt-row">
+          <label>Receipt Photo (optional)</label>
+          <input id="cl-receipt" type="file" accept="image/*" style="margin:4px 0 12px;">
+        </div>
         <button onclick="submitClaim()" style="width:100%;">Submit Claim</button>
         <p id="cl-msg" style="margin-top:8px;color:green;"></p>
       </div>
 
-      <!-- Fallback: for trips with no matching attendance row in the period -->
+      <!-- Fallback: pick any date already in the loaded period sheet -->
       <div style="margin-top:20px;">
-        <button onclick="openClaimForm('','special-fare')" style="font-size:.85em;">+ Add Claim for Another Day</button>
-        <span style="margin-left:10px;font-size:.82em;color:#666;">Use for trips not listed in the sheet above</span>
+        <button onclick="openClaimForAnyDate()" style="font-size:.85em;">+ Add Claim for Another Day</button>
+        <span style="margin-left:10px;font-size:.82em;color:#666;">Pick any date from your loaded period sheet</span>
       </div>
     </div>
 
@@ -164,14 +171,26 @@
     }
 
     // ---- Inline claim form ----
+    function openClaimForAnyDate() {
+      if (!window._lastPeriodSheet) {
+        alert('Load your period sheet first.');
+        return;
+      }
+      openClaimForm('', 'special-fare');
+    }
+
     function openClaimForm(date, type) {
-      var dateEl = document.getElementById('cl-date');
+      var sheet   = window._lastPeriodSheet;
+      var dates   = sheet ? sheet.rows.map(function(r) { return r.date; }) : [];
+      var dateSel = document.getElementById('cl-date');
+      dateSel.innerHTML = dates.map(function(d) {
+        return '<option value="' + d + '">' + d + '</option>';
+      }).join('');
       if (date) {
-        dateEl.value = date;
-        dateEl.setAttribute('readonly', 'readonly');
+        dateSel.value = date;
+        dateSel.setAttribute('disabled', 'disabled');
       } else {
-        dateEl.value = '';
-        dateEl.removeAttribute('readonly');
+        dateSel.removeAttribute('disabled');
       }
       document.getElementById('cl-type').value = type;
       document.getElementById('cl-form-title').textContent =
@@ -179,16 +198,33 @@
       // Show FROM/TO/MODE only for fare claims
       document.getElementById('cl-fare-fields').style.display =
         type === 'accommodation' ? 'none' : 'block';
+      // Fare claims (Jeepney/Tricycle/Company Service) are all receipt-exempt
+      // — only Accommodation claims still show the Receipt Photo field.
+      document.getElementById('cl-receipt-row').style.display =
+        type === 'accommodation' ? 'block' : 'none';
       document.getElementById('cl-from').value   = '';
       document.getElementById('cl-to').value     = '';
       document.getElementById('cl-mode').value   = '';
       document.getElementById('cl-amount').value = '';
+      document.getElementById('cl-amount').removeAttribute('readonly');
       document.getElementById('cl-notes').value  = '';
       document.getElementById('cl-receipt').value = '';
       document.getElementById('cl-msg').textContent = '';
       var form = document.getElementById('emp-inline-claim');
       form.style.display = 'block';
       form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function onModeChange() {
+      var mode = document.getElementById('cl-mode').value;
+      var amountEl = document.getElementById('cl-amount');
+      if (mode === 'Company Service') {
+        amountEl.value = '0';
+        amountEl.setAttribute('readonly', 'readonly');
+      } else {
+        amountEl.removeAttribute('readonly');
+        if (amountEl.value === '0') amountEl.value = '';
+      }
     }
 
     function hideClaimForm() {
@@ -199,9 +235,19 @@
       var user      = currentUser();
       var dateVal   = document.getElementById('cl-date').value;
       var claimType = document.getElementById('cl-type').value;
+      var mode      = document.getElementById('cl-mode').value;
       var amount    = parseFloat(document.getElementById('cl-amount').value);
-      if (!dateVal || (claimType !== 'company-service' && !amount)) {
-        alert('Date and amount are required.');
+      if (!dateVal) {
+        alert('Date is required.');
+        return;
+      }
+      if (claimType === 'special-fare' && !mode) {
+        alert('Please select a vehicle/mode.');
+        return;
+      }
+      var amountRequired = !(claimType === 'special-fare' && mode === 'Company Service');
+      if (amountRequired && (isNaN(amount) || amount <= 0)) {
+        alert('Amount is required.');
         return;
       }
       if (isNaN(amount)) amount = 0;
@@ -286,11 +332,8 @@
         if (err) return;
         window._plConfig = {};
         data.forEach(function(row) { window._plConfig[row.key] = row.value; });
-        // Pre-fill date inputs from Config period dates so the employee
-        // can press Load immediately without typing — but do NOT auto-load
-        // any data; the employee presses the Load button when ready.
-        document.getElementById('inp-period-start').value = window._plConfig.period_start || '';
-        document.getElementById('inp-period-end').value   = window._plConfig.period_end   || '';
+        // Date inputs stay blank on every login — the employee types/picks
+        // the period manually, then presses Load when ready.
       });
     }
 
