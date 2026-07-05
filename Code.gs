@@ -224,7 +224,12 @@ function handleGetRates(payload) {
     employeeRates: sheetToObjects('EmployeeRates'),
     midnight:       sheetToObjects('MidnightRates'),
     ltfrb:          sheetToObjects('LTFRBRates'),
-    config:         sheetToObjects('Config')
+    config:         sheetToObjects('Config'),
+    // Read-only reference data for the admin Rate Tables tab's Area
+    // dropdown (search-and-select Area, auto-fills Region/Province) — not
+    // one of the RATE_SHEET_NAMES editable rate tables, just exposed here
+    // for the frontend to read.
+    areaCenters:    sheetToObjects('AreaCenters')
   };
 }
 

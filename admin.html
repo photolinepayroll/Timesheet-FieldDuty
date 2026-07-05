@@ -318,8 +318,8 @@
         { key: 'area',          label: 'Area' },
         { key: 'meal_amount',   label: 'Meal ₱' },
         { key: 'accom_amount',  label: 'Accom ₱' },
-        { key: 'region',        label: 'Region' },
-        { key: 'province',      label: 'Province' }
+        { key: 'province',      label: 'Province' },
+        { key: 'region',        label: 'Region' }
       ]},
       { sheet: 'MidnightRates', title: 'Midnight Rates', columns: [
         { key: 'label',     label: 'Label' },
@@ -340,6 +340,9 @@
     function loadRates() {
       api('getRates', {}, function(err, data) {
         if (err) { alert(err.message); return; }
+        // Cached for the EmployeeRates table's searchable Area dropdown —
+        // see buildRateRow()/wireAreaAutocomplete() below.
+        window._areaCentersList = data.areaCenters || [];
         var wrap = document.getElementById('rates-tables');
         wrap.innerHTML = '';
         RATE_TABLES.forEach(function(cfg) {
@@ -409,11 +412,70 @@
 
     function buildRateRow(cfg, row) {
       var tr = document.createElement('tr');
+      // EmployeeRates' Area gets a searchable dropdown (see
+      // wireAreaAutocomplete below) instead of free text, since a typo
+      // there is exactly what silently zeroed out meal/accom for whole
+      // employees before the 2026-07-05 AreaCenters/standardize work.
+      // Region/Province are read-only — always derived from whichever
+      // Area is picked, never hand-typed, so they can never drift out of
+      // sync with AreaCenters again.
+      var isEmployeeRates = cfg.sheet === 'EmployeeRates';
       tr.innerHTML = cfg.columns.map(function(c) {
         var val = row[c.key] !== undefined && row[c.key] !== null ? row[c.key] : '';
-        return '<td><input type="text" data-key="' + c.key + '" value="' + String(val).replace(/"/g, '&quot;') + '" style="width:100%;box-sizing:border-box;"></td>';
+        var escaped = String(val).replace(/"/g, '&quot;');
+        if (isEmployeeRates && c.key === 'area') {
+          return '<td style="position:relative;">' +
+                   '<input type="text" data-key="area" autocomplete="off" value="' + escaped + '" style="width:100%;box-sizing:border-box;">' +
+                   '<div class="emp-ac-list area-ac-list"></div>' +
+                 '</td>';
+        }
+        if (isEmployeeRates && (c.key === 'region' || c.key === 'province')) {
+          return '<td><input type="text" data-key="' + c.key + '" value="' + escaped + '" readonly style="width:100%;box-sizing:border-box;background:#f0f0f0;"></td>';
+        }
+        return '<td><input type="text" data-key="' + c.key + '" value="' + escaped + '" style="width:100%;box-sizing:border-box;"></td>';
       }).join('') + '<td><button onclick="this.closest(\'tr\').remove()">Delete</button></td>';
+      if (isEmployeeRates) wireAreaAutocomplete(tr);
       return tr;
+    }
+
+    // Wires the searchable Area dropdown inside one EmployeeRates <tr>:
+    // typing filters window._areaCentersList (loaded once in loadRates()),
+    // and picking a suggestion fills that same row's read-only
+    // Region/Province inputs from the matched AreaCenters entry.
+    function wireAreaAutocomplete(tr) {
+      var input = tr.querySelector('input[data-key="area"]');
+      var list  = tr.querySelector('.area-ac-list');
+      if (!input || !list) return;
+      var regionInput   = tr.querySelector('input[data-key="region"]');
+      var provinceInput = tr.querySelector('input[data-key="province"]');
+
+      function render(filterText) {
+        var q = (filterText || '').trim().toLowerCase();
+        var areas = window._areaCentersList || [];
+        var matches = areas.filter(function(a) { return !q || String(a.area).toLowerCase().indexOf(q) !== -1; });
+        if (!matches.length) { list.style.display = 'none'; return; }
+        list.innerHTML = matches.slice(0, 50).map(function(a) {
+          return '<div class="emp-ac-item" data-area="' + escapeHtml(a.area) + '" data-region="' + escapeHtml(a.region) + '" data-province="' + escapeHtml(a.province) + '">' +
+                   '<b>' + escapeHtml(a.area) + '</b>' +
+                   '<small>' + escapeHtml(a.region) + (a.province ? ' · ' + escapeHtml(a.province) : '') + '</small>' +
+                 '</div>';
+        }).join('');
+        list.style.display = 'block';
+      }
+
+      input.addEventListener('input', function() { render(input.value); });
+      input.addEventListener('focus', function() { render(input.value); });
+      input.addEventListener('blur', function() {
+        setTimeout(function() { list.style.display = 'none'; }, 150);
+      });
+      list.addEventListener('mousedown', function(ev) {
+        var item = ev.target.closest('.emp-ac-item');
+        if (!item) return;
+        input.value = item.dataset.area;
+        if (regionInput)   regionInput.value = item.dataset.region;
+        if (provinceInput) provinceInput.value = item.dataset.province;
+        list.style.display = 'none';
+      });
     }
 
     function saveRateTable(cfg) {
