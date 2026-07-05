@@ -244,14 +244,14 @@
     }
 
     var ATTENDANCE_BADGE = {
-      'exact':     { cls: 'match-ok',   label: 'Exact' },
-      'case-only': { cls: 'match-warn', label: 'Case-only match' },
-      'none':      { cls: 'match-bad',  label: 'No attendance found' }
+      'exact':     { cls: 'match-ok',   label: 'Match' },
+      'case-only': { cls: 'match-warn', label: 'Close match (letter case differs)' },
+      'none':      { cls: 'match-bad',  label: 'No attendance record found' }
     };
     var RATES_BADGE = {
-      'employee':      { cls: 'match-ok',   label: 'Employee-specific' },
-      'dept-fallback': { cls: 'match-warn', label: 'Dept fallback only' },
-      'none':          { cls: 'match-bad',  label: 'No rates' }
+      'employee':      { cls: 'match-ok',   label: 'Has own rate' },
+      'dept-fallback': { cls: 'match-warn', label: 'Uses shared department rate' },
+      'none':          { cls: 'match-bad',  label: 'No rate found' }
     };
 
     function checkNameMatches() {
