@@ -250,6 +250,174 @@ function handleSaveRates(payload) {
 }
 
 // ============================================================
+// ONE-TIME IMPORT — AreaCenters full rebuild (2026-07-05)
+// ============================================================
+// Not wired into RATE_SHEET_NAMES/handleSaveRates on purpose — AreaCenters
+// stays "admin-edited, not auto-generated" per SETUP.md. Run this manually
+// once from the Apps Script editor's function picker, then delete it —
+// same convention as the prior EmployeeRates bulk import (see Resume.md).
+// Rebuilds AreaCenters from 3 columns (area|lat|lng) to 5
+// (area|lat|lng|province|region) using the "Coordinates Employee rates.pdf"
+// admin supplied 2026-07-05: 118 real store/mall branches, 6 broad-region
+// representative points, and 8 legacy-area-name rows (reusing an existing
+// nearby store's coordinates) that close the previously-documented
+// "AreaCenters rows missing for broad area names" open issue. PROVINCIAL
+// is deliberately NOT included — no single coordinate is sensible for a
+// literal "any province" fallback name; left as a documented permanent gap.
+function oneTimeImportAreaCenters() {
+  var sh = getSheet('AreaCenters');
+  var headers = ['area', 'lat', 'lng', 'province', 'region'];
+  var oldLastRow = sh.getLastRow();
+  var oldLastCol = Math.max(sh.getLastColumn(), headers.length);
+  if (oldLastRow > 0) {
+    sh.getRange(1, 1, oldLastRow, oldLastCol).clearContent();
+  }
+  var rows = [
+    // 118 per-store rows, verbatim from the PDF (Store Mall, lat, lng, Province, Region/Area)
+    ['Abreeza Davao', 7.0911904, 125.611299, 'Davao del Sur', 'MINDANAO'],
+    ['Alabang Town Center', 14.4229089, 121.0299295, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['Alimall', 14.6195569, 121.0567919, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['Arca South', 14.505245, 121.0439665, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['Ayala Bacolod', 10.6767825, 122.9502508, 'Negros Occidental', 'VISAYAS'],
+    ['Ayala Fairview', 14.7363856, 121.0601532, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['C. Center', 14.4191063, 121.0347268, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['Cash & Carry', 14.5586644, 121.005787, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['CSI-1', 16.0235482, 120.3233352, 'Pangasinan', 'NORTH LUZON'],
+    ['Festival Mall', 14.4173814, 121.0403204, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['Gaisano Tagum', 7.449246, 125.8115664, 'Davao del Norte', 'MINDANAO'],
+    ['Gateway', 14.6217945, 121.0528441, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['Greenhills', 14.6008192, 121.0484381, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['Harbor Point', 14.824898, 120.280219, 'Zambales', 'NORTH LUZON'],
+    ['Jenra Dau', 15.1788005, 120.5875015, 'Pampanga', 'NORTH LUZON'],
+    ['JTC Vigan', 17.5893511, 120.3892454, 'Ilocos Sur', 'NORTH LUZON'],
+    ['LCC Legaspi', 13.1472294, 123.7533517, 'Albay', 'SOUTH LUZON'],
+    ['LCC Polangui', 13.2889761, 123.4909201, 'Albay', 'SOUTH LUZON'],
+    ['LCC Tabaco', 13.3580349, 123.7297836, 'Albay', 'SOUTH LUZON'],
+    ['Limketkai', 8.4815828, 124.6560603, 'Misamis Oriental', 'MINDANAO'],
+    ['Magic Mall San Carlos', 15.9321453, 120.3457204, 'Pangasinan', 'NORTH LUZON'],
+    ['Market! Market!', 14.5502545, 121.0561214, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['Marquee Mall', 15.1626197, 120.6098906, 'Pampanga', 'NORTH LUZON'],
+    ['Nagaland E-Mall', 13.6251932, 123.1863596, 'Camarines Sur', 'SOUTH LUZON'],
+    ['Nepo Alaminos', 16.1551235, 119.9806954, 'Pangasinan', 'NORTH LUZON'],
+    ['Nepo Angeles', 15.1349646, 120.5884236, 'Pampanga', 'NORTH LUZON'],
+    ['One Ayala', 14.5504493, 121.0278251, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['R Valencia', 7.9342625, 125.0997739, 'Bukidnon', 'MINDANAO'],
+    ['R. Antipolo', 14.5951779, 121.1727884, 'Rizal', 'SOUTH LUZON'],
+    ['R. Antique', 10.7363788, 121.9516577, 'Antique', 'VISAYAS'],
+    ['R. Bacolod', 10.6914441, 122.9584763, 'Negros Occidental', 'VISAYAS'],
+    ['R. Cebu', 10.3041971, 123.9112621, 'Cebu', 'VISAYAS'],
+    ['R. Dasmariñas', 14.2999244, 120.9540761, 'Cavite', 'CAVITE AREA'],
+    ['R. Ermita 1', 14.5758375, 120.9839388, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['R. Ermita 2', 14.5764797, 120.9827984, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['R. Galleria', 14.5910506, 121.0598379, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['R. Gapan', 15.3007114, 120.9478721, 'Nueva Ecija', 'NORTH LUZON'],
+    ['R. Iligan', 8.2182056, 124.2403316, 'Lanao del Norte', 'MINDANAO'],
+    ['R. Ilo-ilo 1', 10.6941504, 122.5662128, 'Iloilo', 'VISAYAS'],
+    ['R. Ilo-ilo 2', 10.7194991, 122.5602461, 'Iloilo', 'VISAYAS'],
+    ['R. Imus', 14.412979, 120.9417939, 'Cavite', 'CAVITE AREA'],
+    ['R. Metro East', 14.6196165, 121.0999832, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['R. Pagadian', 7.8272998, 123.4378573, 'Zamboanga del Sur', 'MINDANAO'],
+    ['R. Palawan', 9.7670357, 118.7482247, 'Palawan', 'SOUTH LUZON'],
+    ['R. Tacloban', 11.2076804, 125.0082809, 'Leyte', 'VISAYAS'],
+    ['Rob Galleria South', 14.3521045, 121.0622036, 'Laguna', 'SOUTH LUZON'],
+    ['Rob Ilocos', 18.1798657, 120.5926892, 'Ilocos Norte', 'NORTH LUZON'],
+    ['Rob. Roxas', 11.5691276, 122.7516453, 'Capiz', 'VISAYAS'],
+    ['SM Aura', 14.5451358, 121.0533845, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['SM Bacolod', 10.670787, 122.9426715, 'Negros Occidental', 'VISAYAS'],
+    ['SM Bacoor 2', 14.445098, 120.9511457, 'Cavite', 'CAVITE AREA'],
+    ['SM Baguio', 16.4088516, 120.5998022, 'Benguet', 'NORTH LUZON'],
+    ['SM Baliwag', 14.9601687, 120.8903531, 'Bulacan', 'NORTH LUZON'],
+    ['SM Bataan', 14.6824965, 120.5381408, 'Bataan', 'NORTH LUZON'],
+    ['SM Batangas', 13.7552925, 121.068434, 'Batangas', 'SOUTH LUZON'],
+    ['SM Bicutan', 14.4870683, 121.0440722, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['SM Butuan', 8.9454067, 125.5334816, 'Agusan del Norte', 'MINDANAO'],
+    ['SM Calamba', 14.2041849, 121.1545856, 'Laguna', 'SOUTH LUZON'],
+    ['SM Caloocan', 14.751327, 121.0202188, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['SM CDO Premier', 8.4843206, 124.6549106, 'Misamis Oriental', 'MINDANAO'],
+    ['SM CDO UP Town', 8.4558491, 124.6234008, 'Misamis Oriental', 'MINDANAO'],
+    ['SM Cebu', 10.3114191, 123.9178164, 'Cebu', 'VISAYAS'],
+    ['SM Clark', 15.1699129, 120.5792407, 'Pampanga', 'NORTH LUZON'],
+    ['SM Daet', 14.12164, 122.9458603, 'Camarines Norte', 'SOUTH LUZON'],
+    ['SM Dagupan', 16.0443393, 120.3436764, 'Pangasinan', 'NORTH LUZON'],
+    ['SM Dasmariñas', 14.301747, 120.9567294, 'Cavite', 'CAVITE AREA'],
+    ['SM Ecoland', 7.0506083, 125.5882523, 'Davao del Sur', 'MINDANAO'],
+    ['SM Fairview', 14.7345991, 121.057901, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['Sm Gen San', 6.1154774, 125.1810148, 'South Cotabato', 'MINDANAO'],
+    ['SM Grand Central', 14.6550839, 120.9845139, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['SM Iloilo', 10.7143716, 122.5510023, 'Iloilo', 'VISAYAS'],
+    ['SM Iloilo Terminal', 10.6929993, 122.5644997, 'Iloilo', 'VISAYAS'],
+    ['Sm La Union', 16.6255511, 120.3238458, 'La Union', 'NORTH LUZON'],
+    ['Sm Lanang', 7.0990116, 125.6315227, 'Davao del Sur', 'MINDANAO'],
+    ['SM Laoag', 18.1879012, 120.5855843, 'Ilocos Norte', 'NORTH LUZON'],
+    ['SM Las Piñas', 14.4485208, 120.9803942, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['SM Legaspi', 13.1437617, 123.7438313, 'Albay', 'SOUTH LUZON'],
+    ['SM Lipa', 13.95464, 121.1633598, 'Batangas', 'SOUTH LUZON'],
+    ['SM Manila', 14.5901469, 120.9830916, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['SM Marikina', 14.6260595, 121.0837029, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['SM Marilao', 14.7541635, 120.9565923, 'Bulacan', 'NORTH LUZON'],
+    ['SM Masinag', 14.625364, 121.1199172, 'Rizal', 'SOUTH LUZON'],
+    ['SM Megamall', 14.5856693, 121.0566083, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['SM MOA', 14.5358397, 120.980416, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['SM Molino', 14.3831641, 120.9775927, 'Cavite', 'CAVITE AREA'],
+    ['SM Naga', 13.6211327, 123.1903499, 'Camarines Sur', 'SOUTH LUZON'],
+    ['SM North Main', 14.6563879, 121.0300734, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['SM North The Block', 14.6558939, 121.0323097, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['SM Novaliches', 14.7081659, 121.0381529, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['SM Olongapo Central', 14.8370173, 120.282813, 'Zambales', 'NORTH LUZON'],
+    ['SM Olongapo Downtown', 14.8264573, 120.2831319, 'Zambales', 'NORTH LUZON'],
+    ['SM Palawan', 9.7439738, 118.7402726, 'Palawan', 'SOUTH LUZON'],
+    ['SM Pampanga 2', 15.052138, 120.6988582, 'Pampanga', 'NORTH LUZON'],
+    ['SM Rosales', 15.8781997, 120.6025975, 'Pangasinan', 'NORTH LUZON'],
+    ['SM Rosario', 14.4091917, 120.8573046, 'Cavite', 'CAVITE AREA'],
+    ['SM Roxas', 11.5957877, 122.7487031, 'Capiz', 'VISAYAS'],
+    ['SM San Jose', 14.7864953, 121.075104, 'Bulacan', 'NORTH LUZON'],
+    ['SM San Lazaro', 14.6179182, 120.9854576, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['SM San Mateo', 14.6801335, 121.1139431, 'Rizal', 'SOUTH LUZON'],
+    ['SM San Pablo', 14.0713633, 121.3015686, 'Laguna', 'SOUTH LUZON'],
+    ['SM San Pedro', 14.3330862, 121.0284876, 'Laguna', 'SOUTH LUZON'],
+    ['SM Sangandaan', 14.6585595, 120.9717542, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['SM Seaside', 10.2818856, 123.8812841, 'Cebu', 'VISAYAS'],
+    ['SM Sorsogon', 12.9763652, 124.0193223, 'Sorsogon', 'SOUTH LUZON'],
+    ['SM South Mall', 14.433448, 121.0106928, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['SM Sta Rosa 1', 14.3128036, 121.0983253, 'Laguna', 'SOUTH LUZON'],
+    ['SM Sta. Mesa', 14.6046632, 121.0190613, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['SM Sto. Tomas', 14.1059623, 121.1501117, 'Batangas', 'SOUTH LUZON'],
+    ['SM Sucat', 14.4688911, 121.0103989, 'Metro Manila (NCR)', 'NCR AREA'],
+    ['SM Tanza', 14.3932578, 120.8498271, 'Cavite', 'CAVITE AREA'],
+    ['SM Tarlac', 15.4774417, 120.5948595, 'Tarlac', 'NORTH LUZON'],
+    ['SM Taytay', 14.5649089, 121.1392497, 'Rizal', 'SOUTH LUZON'],
+    ['SM Telabastagan', 15.120246, 120.6018769, 'Pampanga', 'NORTH LUZON'],
+    ['SM Trece Martires', 14.282036, 120.8659846, 'Cavite', 'CAVITE AREA'],
+    ['SM Tuguegarao', 17.6274396, 121.7179561, 'Cagayan', 'NORTH LUZON'],
+    ['SM Urdaneta', 15.9711341, 120.5718656, 'Pangasinan', 'NORTH LUZON'],
+    ['Victory Antipolo', 14.5882015, 121.1759186, 'Rizal', 'SOUTH LUZON'],
+    ['Vista Mall Bataan', 14.6548009, 120.5338636, 'Bataan', 'NORTH LUZON'],
+
+    // 6 broad-region rows — one real, named representative store per PDF region
+    ['NCR AREA', 14.5856693, 121.0566083, '(multiple)', 'NCR AREA'],
+    ['CAVITE AREA', 14.301747, 120.9567294, '(multiple)', 'CAVITE AREA'],
+    ['NORTH LUZON', 15.1699129, 120.5792407, '(multiple)', 'NORTH LUZON'],
+    ['SOUTH LUZON', 14.2041849, 121.1545856, '(multiple)', 'SOUTH LUZON'],
+    ['VISAYAS', 10.3114191, 123.9178164, '(multiple)', 'VISAYAS'],
+    ['MINDANAO', 7.0911904, 125.611299, '(multiple)', 'MINDANAO'],
+
+    // 9 legacy-area-name rows — reuse an existing nearby PDF store's coordinates.
+    // PROVINCIAL is intentionally NOT included (see comment above the function).
+    ['PAMPANGA AREA', 15.1626197, 120.6098906, 'Pampanga', 'NORTH LUZON'],
+    ['OLONGAPO AREA', 14.8370173, 120.282813, 'Zambales', 'NORTH LUZON'],
+    ['DAGUPAN AREA', 16.0443393, 120.3436764, 'Pangasinan', 'NORTH LUZON'],
+    ['BULACAN AREA', 14.9601687, 120.8903531, 'Bulacan', 'NORTH LUZON'],
+    ['LAGUNA AREA', 14.2041849, 121.1545856, 'Laguna', 'SOUTH LUZON'],
+    ['BICOL AREA', 13.1437617, 123.7438313, 'Albay', 'SOUTH LUZON'],
+    ['VIS/MIN AREA', 10.3114191, 123.9178164, 'Cebu', 'VISAYAS'],
+    ['VISMIN / MINDANAO', 10.3114191, 123.9178164, 'Cebu', 'VISAYAS']
+  ];
+  sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sh.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  return 'AreaCenters rebuilt: ' + rows.length + ' rows';
+}
+
+// ============================================================
 // FARE AUTO-COMPUTE — OSRM distance + LTFRB formula
 // ============================================================
 

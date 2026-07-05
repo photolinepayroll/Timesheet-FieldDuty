@@ -70,20 +70,28 @@ Leave the rest of the rows empty for now (rates will be added later).
 
 Row 1 headers:
 ```
-area | lat | lng
+area | lat | lng | province | region
 ```
 This is a GPS-fallback reference table, used only when text-substring
 matching against `EmployeeRates` areas fails (see the note above). It is
-admin-edited, not auto-generated.
+admin-edited, not auto-generated (populated in bulk via a one-time Apps
+Script function when needed, e.g. `oneTimeImportAreaCenters` — see
+`Resume.md` for the 2026-07-05 full rebuild from real store/mall GPS data).
 - `area` must exactly match an existing `EmployeeRates.area` value used as
-  a department-fallback region name (e.g. `"NCR AREA"`, `"CAVITE AREA"`).
-  Matched case-insensitively.
+  a department-fallback region name (e.g. `"NCR AREA"`, `"CAVITE AREA"`) —
+  or, since the 2026-07-05 rebuild, may also be a specific store/mall name
+  matching an employee-specific `EmployeeRates.area` value. Matched
+  case-insensitively.
 - `lat`/`lng` are plain decimal numbers representing ONE representative
-  point for that named region (not a polygon, not multiple points —
+  point for that named area (not a polygon, not multiple points —
   nearest-center classification needs exactly one point per area).
+- `province`/`region` are reference-only columns (not read by any
+  `Code.gs` handler) — kept for admin readability and future use.
 - One row per area name. If an area appears in `EmployeeRates` but has no
   `AreaCenters` row, GPS fallback simply cannot resolve that area (falls
-  through to the existing raw-`destination` default).
+  through to the existing raw-`destination` default). `PROVINCIAL` is a
+  known, permanent example of this — no single coordinate is sensible for
+  a literal "any province" fallback name.
 
 ### Tab: `MealDenials`
 
