@@ -322,20 +322,13 @@
         { key: 'to_hour',   label: 'To Hour' },
         { key: 'to_min',    label: 'To Min' },
         { key: 'amount',    label: 'Amount' }
-      ]},
-      { sheet: 'LTFRBRates',    title: 'LTFRB Rates', columns: [
-        { key: 'vehicle_type', label: 'Vehicle Type' },
-        { key: 'base_fare',    label: 'Base Fare' },
-        { key: 'base_km',      label: 'Base KM' },
-        { key: 'per_km',       label: 'Per KM' }
       ]}
     ];
 
     // map of sheet -> rates key returned by handleGetRates
     var RATE_DATA_KEY = {
       EmployeeRates: 'employeeRates',
-      MidnightRates: 'midnight',
-      LTFRBRates: 'ltfrb'
+      MidnightRates: 'midnight'
     };
 
     function loadRates() {
