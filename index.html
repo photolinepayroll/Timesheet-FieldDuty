@@ -212,17 +212,17 @@
     // catch-all categories (could be a bus, a company car, a specific gas
     // station, etc.) — a receipt alone doesn't say which, so both a receipt
     // AND a note naming the actual vehicle/gas station are required for
-    // audit. Accommodation claims are unaffected — Receipt Photo stays
-    // visible-but-optional, Notes stays optional, as always.
+    // audit. Accommodation claims also require a receipt (hotel/lodging
+    // always issues one) — only Jeepney/Tricycle/FX/Company Service stay
+    // receipt-exempt.
     var RECEIPT_REQUIRED_MODES = ['LAND', 'SEA', 'AIR', 'GAS EXPENSE'];
     var NOTE_REQUIRED_MODES    = RECEIPT_REQUIRED_MODES;
 
     function updateReceiptVisibility() {
       var claimType = document.getElementById('cl-type').value;
       var mode      = document.getElementById('cl-mode').value;
-      var required  = RECEIPT_REQUIRED_MODES.indexOf(mode) !== -1;
-      var show      = claimType === 'accommodation' || required;
-      document.getElementById('cl-receipt-row').style.display = show ? 'block' : 'none';
+      var required  = claimType === 'accommodation' || RECEIPT_REQUIRED_MODES.indexOf(mode) !== -1;
+      document.getElementById('cl-receipt-row').style.display = required ? 'block' : 'none';
       document.getElementById('cl-receipt-label').textContent =
         required ? 'Receipt Photo (required)' : 'Receipt Photo (optional)';
       var noteRequired = NOTE_REQUIRED_MODES.indexOf(mode) !== -1;
@@ -273,9 +273,10 @@
         alert('Please specify the vehicle or gas station in Notes for ' + mode + '.');
         return;
       }
-      if (claimType === 'special-fare' && RECEIPT_REQUIRED_MODES.indexOf(mode) !== -1 &&
-          !document.getElementById('cl-receipt').files[0]) {
-        alert('Receipt photo is required for ' + mode + '.');
+      var receiptRequired = claimType === 'accommodation' ||
+        (claimType === 'special-fare' && RECEIPT_REQUIRED_MODES.indexOf(mode) !== -1);
+      if (receiptRequired && !document.getElementById('cl-receipt').files[0]) {
+        alert('Receipt photo is required for ' + (claimType === 'accommodation' ? 'accommodation claims' : mode) + '.');
         return;
       }
       var config = getStoredConfig();
