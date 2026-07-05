@@ -135,80 +135,110 @@ function renderPeriodSheet(sheet, opts) {
       '</tr></thead><tbody>';
   }
   sheet.rows.forEach(function(r) {
-    html += '<tr>' +
-      '<td>' + escapeHtml(r.date) + '</td>' +
-      '<td>' + escapeHtml(r.branch) + '</td>' +
-      '<td>' + escapeHtml(r.time_in) + '</td>' +
-      '<td>' + escapeHtml(r.time_out) + '</td>' +
-      '<td>' + r.hours_worked + '</td>';
+    var claimDetails = r.claim_details || [];
+    // Itemized log-in/out segments — one <tr> per segment. A day with a
+    // single complete in/out pair has exactly one segment, so this
+    // reproduces today's one-row-per-day output unchanged (rowspan=1 is a
+    // no-op); only genuinely multi-segment ("roving") days visibly differ.
+    var segments = (r.segments && r.segments.length) ? r.segments : [null];
+    var accumClaim = null; // accommodation stays day-level — a hotel stay isn't per-segment
+    claimDetails.forEach(function(c) {
+      if (c.type === 'accommodation' && !accumClaim) accumClaim = c;
+    });
 
-    if (employeeControls) {
-      var claimDetails = r.claim_details || [];
-      var fareClaim  = null;
-      var accumClaim = null;
-      claimDetails.forEach(function(c) {
-        if (c.type === 'special-fare'  && !fareClaim)  fareClaim  = c;
-        if (c.type === 'accommodation' && !accumClaim) accumClaim = c;
-      });
-      html +=
-        '<td>' + escapeHtml(fareClaim ? fareClaim.from_loc    : '') + '</td>' +
-        '<td>' + escapeHtml(fareClaim ? fareClaim.to_loc      : '') + '</td>' +
-        '<td>' + escapeHtml(fareClaim ? fareClaim.vehicle_mode : '') + '</td>' +
-        '<td>' + formatCurrency(r.total_fare) + '</td>' +
-        '<td>' + formatCurrency(r.meal) + '</td>' +
-        '<td>' + formatCurrency(r.accom) + '</td>' +
-        '<td>' + formatCurrency(r.midnight) + '</td>' +
-        '<td><b>' + formatCurrency(r.total_allowance) + '</b></td>';
-      // FARE CLAIM column: + Fare button or status badge
-      if (!fareClaim) {
-        html += '<td><button class="emp-claim-btn" data-date="' + escapeHtml(r.date) + '" data-type="special-fare">+ Fare</button></td>';
-      } else {
-        var fareLabel = fareClaim.status === 'Approved' ? '✓ Approved' : '⏳ Pending';
-        html += '<td><span class="claim-status-badge claim-status-' + escapeHtml(fareClaim.status.toLowerCase()) + '">' + fareLabel + '</span></td>';
+    segments.forEach(function(seg, si) {
+      html += '<tr>';
+      if (si === 0) {
+        html += '<td rowspan="' + segments.length + '">' + escapeHtml(r.date) + '</td>';
+        html += '<td rowspan="' + segments.length + '">' + escapeHtml(r.branch) + '</td>';
       }
-      // ACCOM CLAIM column: + Accom button or status badge
-      if (!accumClaim) {
-        html += '<td><button class="emp-claim-btn" data-date="' + escapeHtml(r.date) + '" data-type="accommodation">+ Accom</button></td>';
-      } else {
-        var accumLabel = accumClaim.status === 'Approved' ? '✓ Approved' : '⏳ Pending';
-        html += '<td><span class="claim-status-badge claim-status-' + escapeHtml(accumClaim.status.toLowerCase()) + '">' + accumLabel + '</span></td>';
+      html += '<td>' + escapeHtml(seg ? seg.time_in  : r.time_in)  + '</td>';
+      html += '<td>' + escapeHtml(seg ? seg.time_out : r.time_out) + '</td>';
+      if (si === 0) {
+        html += '<td rowspan="' + segments.length + '">' + r.hours_worked + '</td>';
       }
-    } else {
-      html +=
-        '<td>' + formatCurrency(r.auto_fare) + '</td>' +
-        '<td>' + formatCurrency(r.special_fare) + '</td>' +
-        '<td><b>' + formatCurrency(r.total_fare) + '</b></td>' +
-        '<td>' + formatCurrency(r.meal) + '</td>' +
-        '<td>' + formatCurrency(r.accom) + '</td>' +
-        '<td>' + formatCurrency(r.midnight) + '</td>' +
-        '<td><b>' + formatCurrency(r.total_allowance) + '</b></td>';
-      if (adminControls) {
-        // Button must remain visible on a denied row (meal forced to 0 by
-        // the server) so the admin can reverse the denial — checking only
-        // `r.meal > 0` would make the button disappear the moment a row
-        // is denied. r.date is a plain 'YYYY-MM-DD' string (never
-        // employee-authored free text), but it's escaped anyway for the
-        // attribute value per this file's existing convention.
-        if (r.meal > 0 || r.meal_denied) {
-          // Button label is the ACTION ("Allow Meal" reverses a denial), not
-          // the current status — easy to misread as "meal is allowed" when
-          // a row is actually denied. The colored status word in front of it
-          // (and the button's own background color) is the actual state
-          // indicator; the button text alone should never be relied on.
-          html += '<td>' +
-            '<span data-status-for="' + escapeHtml(r.date) + '" style="font-weight:bold;color:' + (r.meal_denied ? '#b00020' : '#0a7d2c') + ';margin-right:6px;">' +
-              (r.meal_denied ? 'DENIED' : 'ALLOWED') +
-            '</span>' +
-            '<button class="meal-deny-btn" data-date="' + escapeHtml(r.date) + '" data-denied="' + !!r.meal_denied + '" ' +
-              'style="background:' + (r.meal_denied ? '#b00020' : '#1a1a2e') + ';">' +
-              (r.meal_denied ? 'Allow Meal' : 'Deny Meal') +
-            '</button></td>';
+
+      if (employeeControls) {
+        // Per-segment fare claim: match by segment_key. A legacy (pre-
+        // feature) claim with a blank segment_key has no segment to
+        // attach to — attribute it to segment index 0 as a fallback (no
+        // such claim should exist for a genuinely multi-segment day, since
+        // per-segment claiming didn't exist before this feature).
+        var segClaim = seg ? claimDetails.filter(function(c) {
+          return c.type === 'special-fare' && c.segment_key === seg.seg_key;
+        })[0] : null;
+        if (!segClaim && si === 0) {
+          segClaim = claimDetails.filter(function(c) {
+            return c.type === 'special-fare' && !c.segment_key;
+          })[0] || null;
+        }
+        html +=
+          '<td>' + escapeHtml(segClaim ? segClaim.from_loc     : '') + '</td>' +
+          '<td>' + escapeHtml(segClaim ? segClaim.to_loc       : '') + '</td>' +
+          '<td>' + escapeHtml(segClaim ? segClaim.vehicle_mode : '') + '</td>' +
+          '<td>' + formatCurrency(segClaim ? segClaim.claimed_amount : 0) + '</td>';
+        if (si === 0) {
+          html +=
+            '<td rowspan="' + segments.length + '">' + formatCurrency(r.meal) + '</td>' +
+            '<td rowspan="' + segments.length + '">' + formatCurrency(r.accom) + '</td>' +
+            '<td rowspan="' + segments.length + '">' + formatCurrency(r.midnight) + '</td>' +
+            '<td rowspan="' + segments.length + '"><b>' + formatCurrency(r.total_allowance) + '</b></td>';
+        }
+        // FARE CLAIM column: + Fare button (one per segment) or status badge
+        if (!segClaim) {
+          html += '<td><button class="emp-claim-btn" data-date="' + escapeHtml(r.date) + '" data-seg="' + escapeHtml(seg ? seg.seg_key : '') + '" data-type="special-fare">+ Fare</button></td>';
         } else {
-          html += '<td></td>';
+          var fareLabel = segClaim.status === 'Approved' ? '✓ Approved' : '⏳ Pending';
+          html += '<td><span class="claim-status-badge claim-status-' + escapeHtml(segClaim.status.toLowerCase()) + '">' + fareLabel + '</span></td>';
+        }
+        // ACCOM CLAIM column: + Accom button or status badge — day-level, one per day
+        if (si === 0) {
+          if (!accumClaim) {
+            html += '<td rowspan="' + segments.length + '"><button class="emp-claim-btn" data-date="' + escapeHtml(r.date) + '" data-type="accommodation">+ Accom</button></td>';
+          } else {
+            var accumLabel = accumClaim.status === 'Approved' ? '✓ Approved' : '⏳ Pending';
+            html += '<td rowspan="' + segments.length + '"><span class="claim-status-badge claim-status-' + escapeHtml(accumClaim.status.toLowerCase()) + '">' + accumLabel + '</span></td>';
+          }
+        }
+      } else if (si === 0) {
+        html +=
+          '<td rowspan="' + segments.length + '">' + formatCurrency(r.auto_fare) + '</td>' +
+          '<td rowspan="' + segments.length + '">' + formatCurrency(r.special_fare) + '</td>' +
+          '<td rowspan="' + segments.length + '"><b>' + formatCurrency(r.total_fare) + '</b></td>' +
+          '<td rowspan="' + segments.length + '">' + formatCurrency(r.meal) + '</td>' +
+          '<td rowspan="' + segments.length + '">' + formatCurrency(r.accom) + '</td>' +
+          '<td rowspan="' + segments.length + '">' + formatCurrency(r.midnight) + '</td>' +
+          '<td rowspan="' + segments.length + '"><b>' + formatCurrency(r.total_allowance) + '</b></td>';
+        if (adminControls) {
+          // Button must remain visible on a denied row (meal forced to 0 by
+          // the server) so the admin can reverse the denial — checking only
+          // `r.meal > 0` would make the button disappear the moment a row
+          // is denied. r.date is a plain 'YYYY-MM-DD' string (never
+          // employee-authored free text), but it's escaped anyway for the
+          // attribute value per this file's existing convention. Meal
+          // control stays one-per-day (rowspan) even on a multi-segment
+          // day — meal is a day-level allowance, not per-segment.
+          if (r.meal > 0 || r.meal_denied) {
+            // Button label is the ACTION ("Allow Meal" reverses a denial), not
+            // the current status — easy to misread as "meal is allowed" when
+            // a row is actually denied. The colored status word in front of it
+            // (and the button's own background color) is the actual state
+            // indicator; the button text alone should never be relied on.
+            html += '<td rowspan="' + segments.length + '">' +
+              '<span data-status-for="' + escapeHtml(r.date) + '" style="font-weight:bold;color:' + (r.meal_denied ? '#b00020' : '#0a7d2c') + ';margin-right:6px;">' +
+                (r.meal_denied ? 'DENIED' : 'ALLOWED') +
+              '</span>' +
+              '<button class="meal-deny-btn" data-date="' + escapeHtml(r.date) + '" data-denied="' + !!r.meal_denied + '" ' +
+                'style="background:' + (r.meal_denied ? '#b00020' : '#1a1a2e') + ';">' +
+                (r.meal_denied ? 'Allow Meal' : 'Deny Meal') +
+              '</button></td>';
+          } else {
+            html += '<td rowspan="' + segments.length + '"></td>';
+          }
         }
       }
-    }
-    html += '</tr>';
+      html += '</tr>';
+    });
   });
   // Totals row
   var t = sheet.totals;

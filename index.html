@@ -142,7 +142,7 @@
       document.getElementById('emp-period-sheet').addEventListener('click', function(ev) {
         var btn = ev.target.closest('.emp-claim-btn');
         if (!btn) return;
-        openClaimForm(btn.dataset.date, btn.dataset.type);
+        openClaimForm(btn.dataset.date, btn.dataset.type, btn.dataset.seg);
       });
     });
 
@@ -173,7 +173,7 @@
     }
 
     // ---- Inline claim form ----
-    function openClaimForm(date, type) {
+    function openClaimForm(date, type, segKey) {
       var sheet   = window._lastPeriodSheet;
       var dates   = sheet ? sheet.rows.map(function(r) { return r.date; }) : [];
       var dateSel = document.getElementById('cl-date');
@@ -186,9 +186,21 @@
       } else {
         dateSel.removeAttribute('disabled');
       }
+      // Which segment this claim is for is implied by the button clicked,
+      // not user-editable — stored on window state rather than a visible
+      // form field, same reasoning as locking the date select above.
+      window._pendingClaimSegKey = segKey || '';
       document.getElementById('cl-type').value = type;
       var formCaption = type === 'accommodation' ? 'Submit Accommodation Expenses' : 'Submit Fare Expenses';
-      document.getElementById('cl-form-title').textContent = formCaption;
+      var titleCaption = formCaption;
+      if (segKey) {
+        var segRow = sheet && sheet.rows.filter(function(r){ return r.date === date; })[0];
+        var seg = segRow && (segRow.segments || []).filter(function(s){ return s.seg_key === segKey; })[0];
+        if (seg && (seg.time_in || seg.time_out)) {
+          titleCaption += ' — ' + (seg.time_in || '?') + ' to ' + (seg.time_out || '?');
+        }
+      }
+      document.getElementById('cl-form-title').textContent = titleCaption;
       document.getElementById('cl-submit-btn').textContent = formCaption;
       // Show FROM/TO/MODE only for fare claims
       document.getElementById('cl-fare-fields').style.display =
@@ -246,6 +258,9 @@
 
     function hideClaimForm() {
       document.getElementById('emp-inline-claim').style.display = 'none';
+      // Avoid a stale segKey leaking into a later, unrelated submission
+      // (e.g. an accommodation claim opened right after cancelling a fare form).
+      window._pendingClaimSegKey = '';
     }
 
     function submitClaim() {
@@ -297,7 +312,8 @@
         status:          'Submitted',
         approver_name:   '',
         approved_at:     '',
-        notes:           document.getElementById('cl-notes').value.trim()
+        notes:           document.getElementById('cl-notes').value.trim(),
+        segment_key:     window._pendingClaimSegKey || ''
       };
       // Receipt: compress to a standard-doc-quality JPEG, then convert to
       // base64. Google Sheets cells cap at ~50,000 characters; an

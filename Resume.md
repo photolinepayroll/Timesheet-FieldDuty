@@ -108,13 +108,89 @@ commits:
    above, but prevents it at data-entry time for every future edit instead
    of needing another one-time cleanup pass.
 
-Not yet done: admin also asked (same session) to make the Employees tab's
-Add/Edit form (`openUserForm` in `admin.html`) Department field smarter —
-plain default for employees with employee-specific rates, dropdown of
-real fallback-department names otherwise. Exploration was interrupted
-mid-session; picking this up next needs `openUserForm(u)`/`loadUsers()`
-in `admin.html` and `handleCheckNameMatches`'s `rates_status` field in
-`Code.gs` for the employee-specific-vs-fallback classification.
+**RESOLVED (2026-07-06, same session): Employees tab Add/Edit Department
+field made context-aware.** Commit `f2701bf`. `openUserForm(u)` wraps the
+Department field in a container div (`uf-dept-wrap`) and calls a new
+`setupDepartmentField(u)`, which fetches `getRates` and, for existing
+employees, `checkNameMatches` (for `rates_status`) to decide which control
+to render: `renderDepartmentPlain(value)` — a plain text input — for
+employees who already have employee-specific `EmployeeRates` rows (their
+Department value isn't used for rate lookup at all); `renderDepartmentDropdown(value, fallbackDepts)` —
+a `<select>` limited to the department names that actually have
+fallback rows in `EmployeeRates` — for employees who rely on
+department-fallback rates, preventing the silent-₱0 risk of a
+`Users.department` string that doesn't exactly match any fallback row.
+No `Code.gs` changes needed (reuses `getRates`/`checkNameMatches`). **Not
+yet live-tested** — next session (or this one, if resuming) should verify
+in the real admin UI: editing "jude H patani" (employee-specific rates)
+shows plain text, editing "Emmerson" (department-fallback rates) shows
+the dropdown with his real department pre-selected.
+
+**RESOLVED (2026-07-06, same session): Per-segment itemized fare claims
+for multi-location ("roving") days.** Admin asked for the timesheet to
+show each distinct-time log-in/out segment as its own itemized row (not
+just first-in/last-out), so a roving employee (multiple branches in one
+day) can file a separate fare claim per location instead of one claim for
+the whole day. Design confirmed via `superpowers` plan-mode: per-segment
+`+ Fare` buttons (not one per day); only EXACT-same-timestamp log records
+merge into one entry (a one-minute difference stays a separate segment);
+one unified rendering code path for every employee (a day with a single
+complete in/out pair renders byte-identical to before — no new "roving"
+flag/mode).
+
+What shipped:
+- `Code.gs`'s `handleGetPeriodSheet` gained a `dedupeExactTimestamps()`
+  helper and, per day, builds a new `segments` array from the existing
+  `day.ins[]`/`day.outs[]` pairing arrays (already populated by the
+  pairing state machine, previously only ever read as `ins[0]`/
+  `outs[last]`) — deduped then index-zipped in chronological order.
+  Mismatched in/out counts mirror the existing whole-day incomplete-log
+  semantics (`complete: false` per segment). **All existing day-level
+  fields (`time_in`/`time_out`/`hours_worked`/`meal`/`accom`/`midnight`/
+  `destinationArea`, the 20-hour sanity cap) are completely untouched** —
+  segments are purely additive, computed from the SAME first-in/last-out
+  values as before. `claim_details` now also passes through a new
+  `segment_key` field per claim.
+- New `Claims.segment_key` column (blank for legacy/day-level claims,
+  holds a segment's Log-In timestamp string for a per-segment fare claim)
+  — `handleSaveClaim` needed zero code change, since it already maps
+  `payload.claim` through the sheet's own header row generically.
+- `app.js`'s shared `renderPeriodSheet(sheet, opts)` now renders one
+  `<tr>` per segment instead of one per day. Day-aggregate columns
+  (DATE/BRANCH/HRS/MEAL/ACCOM/MIDNIGHT/TOTAL, admin's AUTO/SPECIAL/TOTAL
+  FARE, MEAL CTRL) span all of a day's segment rows via `rowspan` — a
+  single-segment day gets `rowspan="1"` everywhere, a no-op that
+  reproduces today's exact appearance. IN/OUT become per-segment in BOTH
+  `index.html` and `admin.html` (same shared function); FROM/TO/MODE/FARE
+  AMT/FARE CLAIM (`+ Fare` button, employee view only) are per-segment
+  with a composite `data-date`+`data-seg` key; accommodation (`+ Accom`)
+  and meal-deny stay day-level/one-per-day (a hotel stay and a meal
+  allowance are both whole-day concepts, not per-trip) — zero change
+  needed to `handleToggleMealDenial`/`_pendingMealChanges`/the
+  `data-status-for` lookup, since there's still exactly one such DOM
+  element per day, just spanning multiple rows.
+- `index.html`'s `openClaimForm`/`submitClaim`/`hideClaimForm` thread a
+  `segKey` parameter through to the claim payload as `segment_key`
+  (implied by which segment's button was clicked, not a visible form
+  field — same pattern as the already-locked date select).
+- `admin.html` needed no code changes (shares `renderPeriodSheet`/
+  `handleGetPeriodSheet` with the employee view). Flagged, not fixed:
+  `exportPeriodCSV` still emits one row per day (day-level fields only,
+  same as before) — itemized segment export is an explicit deferred gap,
+  not silently dropped.
+
+**Not yet live-tested or deployed** — needs (1) the usual manual `Code.gs`
+redeploy, (2) a manual Sheet edit adding the `segment_key` header cell to
+the live `Claims` tab (see `SETUP.md`), and (3) live verification against
+a real employee with a genuine multi-location day: confirm segment count/
+rowspan/column alignment, confirm meal/accom/midnight/total are UNCHANGED
+from before, confirm a normal single-segment day is visually identical to
+today, confirm each segment's own `+ Fare` button/claim round-trips
+correctly, and confirm admin's Deny/Allow Meal still works against a
+multi-segment date. Full plan (with exact line references) was written to
+`C:\Users\Gilbert\.claude\plans\scalable-cooking-aurora.md` during this
+session's plan-mode design pass — keep for reference until the feature is
+confirmed live.
 
 ---
 
@@ -458,6 +534,14 @@ fallback limitation, just newly visible because this feature removed the
 ## Full commit log (newest first, this session's additions on top)
 
 ```
+f2701bf feat: smart Department field in Employee form (default for specific rates, dropdown of fallback depts otherwise)
+bfb9840 docs: record Rate Tables/LTFRB/searchable-dropdown work, flag pending Employees Department task
+614a6f3 feat: searchable Area dropdown for EmployeeRates, auto-fills read-only Region/Province
+757d79c feat: replace native datalist with custom-styled autocomplete dropdown matching app theme
+f2b342a feat: make Employee fields searchable (input+datalist) in Approve Claims and Period Sheets tabs
+4b3b9ad feat: remove LTFRB Rates section from admin Rate Tables tab
+2212569 fix: add Region/Province columns to Rate Tables tab, prevent Save All from wiping them
+31b6c96 docs: mark EmployeeRates standardize/backfill resolved, update AreaCenters row count to 135
 d2b7964 feat: receipt photo viewer + editable claimed amount, mobile album picker fix
 d11d599 feat: batch meal-control saves, add clear allow/deny status indicator
 37ec95c docs: update Resume.md for GitHub Pages, add CLAUDE.md project context

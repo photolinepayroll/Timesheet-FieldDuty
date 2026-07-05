@@ -191,9 +191,15 @@ Aircon City Bus     | 18 | 5 | 2.98
 
 Row 1 headers:
 ```
-id | employee_id | employee_name | date | period_start | period_end | type | from_loc | to_loc | vehicle_mode | distance_km | computed_amount | claimed_amount | receipt_url | gps_check | status | approver_name | approved_at | notes
+id | employee_id | employee_name | date | period_start | period_end | type | from_loc | to_loc | vehicle_mode | distance_km | computed_amount | claimed_amount | receipt_url | gps_check | status | approver_name | approved_at | notes | segment_key
 ```
 Leave the rest of the rows empty (claims will be created by the app later).
+
+`segment_key` (added 2026-07-06, for the itemized per-location fare claim
+feature) is blank for day-level/legacy claims; for a fare claim tied to one
+of a day's itemized log-in/out segments, it holds that segment's Log-In
+timestamp string exactly as logged in attendance (the segment's `seg_key`
+from `handleGetPeriodSheet`).
 
 ### Tab: `Config`
 

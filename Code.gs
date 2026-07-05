@@ -889,6 +889,17 @@ function handleGetPeriodSheet(payload) {
     if (!dayMap[date]) dayMap[date] = { ins: [], outs: [], destination: destination };
     return dayMap[date];
   }
+  // Only records sharing the EXACT same timestamp collapse into one entry —
+  // a duplicate log a few seconds apart (or any other difference) stays
+  // distinct. Used to build per-day itemized segments (see day.segments below).
+  function dedupeExactTimestamps(records) {
+    var seen = {};
+    return records.filter(function(r) {
+      if (seen[r.timestamp]) return false;
+      seen[r.timestamp] = true;
+      return true;
+    });
+  }
 
   // Sort chronologically before pairing — handleGetAttendance doesn't
   // guarantee CSV row order is chronological. NOTE: the real attendance app
@@ -1008,6 +1019,34 @@ function handleGetPeriodSheet(payload) {
     var firstIn  = day.in_record  ? new Date(day.in_record.timestamp)  : null;
     var lastOut  = day.out_record ? new Date(day.out_record.timestamp) : null;
 
+    // Itemized per-location segments — additive, does NOT replace the
+    // first-in/last-out day-level fields above (those still drive meal/
+    // accom/midnight/area resolution exactly as before). Lets an employee
+    // who visited multiple distinct locations in one day file a separate
+    // fare claim per segment instead of one claim for the whole day. Only
+    // exact-same-timestamp records merge (dedupeExactTimestamps) — any
+    // other difference stays a separate segment. Sequential index-zip
+    // pairing is safe here because both arrays are already chronologically
+    // ordered (attRecords sorted above, state machine appends in order).
+    var segIns  = dedupeExactTimestamps(day.ins);
+    var segOuts = dedupeExactTimestamps(day.outs);
+    var segCount = Math.max(segIns.length, segOuts.length);
+    var segments = [];
+    for (var si = 0; si < segCount; si++) {
+      var segIn  = segIns[si]  || null;
+      var segOut = segOuts[si] || null;
+      var segFirstIn = segIn  ? new Date(segIn.timestamp)  : null;
+      var segLastOut = segOut ? new Date(segOut.timestamp) : null;
+      segments.push({
+        seg_key:      segIn ? segIn.timestamp : ('out-' + segOut.timestamp),
+        time_in:      segFirstIn ? segFirstIn.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}) : '',
+        time_out:     segLastOut ? segLastOut.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}) : '',
+        hours_worked: (segFirstIn && segLastOut) ? Math.round(((segLastOut-segFirstIn)/3600000) * 10) / 10 : 0,
+        destination:  segIn ? segIn.destination : segOut.destination,
+        complete:     !!(segIn && segOut)
+      });
+    }
+
     // Sanity cap: a Log Out paired with a stale, never-closed Log In from an
     // earlier day (the employee forgot to log out, and no further Log In
     // happened before the next real Log Out arrived) can span multiple days.
@@ -1090,6 +1129,7 @@ function handleGetPeriodSheet(payload) {
       accom:        accom + specialAccom,
       midnight:     midnight,
       total_allowance: (autoFare + specialFare) + meal + (accom + specialAccom) + midnight,
+      segments: segments,
       claim_details: specialClaimsAll
         .filter(function(c) { return claimDateKey(c['date']) === date; })
         .map(function(c) {
@@ -1100,7 +1140,8 @@ function handleGetPeriodSheet(payload) {
             to_loc:         c['to_loc']       || '',
             vehicle_mode:   c['vehicle_mode'] || '',
             claimed_amount: parseFloat(c['claimed_amount'] || 0),
-            status:         c['status']
+            status:         c['status'],
+            segment_key:    c['segment_key'] || ''
           };
         })
     });
