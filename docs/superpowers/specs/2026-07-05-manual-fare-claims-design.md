@@ -4,16 +4,25 @@
 GitHub until the admin explicitly says to deploy (per this session's working
 agreement).
 
-**Addendum (2026-07-05, same day):** the admin asked to expand the Vehicle/
-Mode dropdown beyond Jeepney/Tricycle/Company Service. Final dropdown:
-Jeepney, Tricycle, FX, Company Service (all receipt-exempt, unchanged from
-above) plus **Bus, Van, By Sea, Personal Gas Refill** — these four are new
-and, unlike every other mode, **require** a receipt photo before submit
-(client-side `alert` block in `submitClaim()`, plus the Receipt Photo field
-becomes visible again and its label switches to "(required)" via a shared
-`updateReceiptVisibility()` helper called from both `openClaimForm` and
-`onModeChange`). Accommodation claims are unaffected — Receipt Photo there
-stays visible-but-optional, as it always was.
+**Addendum (2026-07-05, same day, superseded once more below):** the admin
+first asked to expand the dropdown with Bus/Van/By Sea/Personal Gas Refill
+(all receipt-required) — this was immediately replaced by the final shape
+below before any deploy, kept here only for history.
+
+**Final addendum (2026-07-05):** the dropdown settled on 8 options: Jeepney,
+Tricycle, FX, Company Service (all exempt from both Receipt Photo and Notes
+— unchanged since the original design above) plus **LAND, SEA, AIR, GAS
+EXPENSE** — broad catch-all categories (a LAND claim could be a bus, a
+company car, anything not covered by the specific Jeepney/Tricycle/FX
+options). Because a receipt alone doesn't say which, these four require
+**both** a receipt photo AND a non-empty Notes field naming the actual
+vehicle or gas station, enforced client-side in `submitClaim()` via two
+`RECEIPT_REQUIRED_MODES`/`NOTE_REQUIRED_MODES` arrays (currently identical
+lists). The Receipt Photo and Notes labels dynamically switch to
+"(required)" via a shared `updateReceiptVisibility()` helper called from
+both `openClaimForm` and `onModeChange`. Accommodation claims are
+unaffected — Receipt Photo stays visible-but-optional and Notes stays
+optional, as always.
 
 ## Why
 
