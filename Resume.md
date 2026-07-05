@@ -72,6 +72,50 @@ and column addition only, not a rate change. `region`/`province` are
 reference-only for now, not read by any `Code.gs` handler — prep for a
 future frontend feature.
 
+**RESOLVED (2026-07-06): Rate Tables tab frontend follow-up to the
+region/province backfill above, plus employee-search UX polish.** Five
+commits:
+1. `2212569` — added Region/Province columns to the EmployeeRates block
+   in the admin Rate Tables tab (`RATE_TABLES[0].columns` in `admin.html`
+   is the single source of truth for both header cells and per-row
+   `<input>` generation, confirmed by reading `buildEmployeeRateGroup`/
+   `buildRateRow`/`saveGroupedEmployeeRates`). **This was fixing a live
+   data-loss bug, not just cosmetics**: before this, "Save All" only ever
+   collected the 5 old keys into the `saveRates` payload, and
+   `handleSaveRates` clears-then-rewrites every data row strictly from
+   payload keys — so the very next admin save would have silently blanked
+   `region`/`province` for all 236 rows just backfilled above.
+2. `4b3b9ad` — removed the LTFRB Rates section from the same tab (dead UI
+   for a rate table that's been dormant since the 2026-07-05 manual-fare-
+   claims retirement of auto-fare); backend `LTFRBRates` sheet and
+   `computeFare()`/`buildAutoFareClaim()` untouched, still intentionally
+   left in place per that earlier decision.
+3. `f2b342a` then `757d79c` — the Employee field in Approve Claims and
+   Period Sheets went from a plain `<select>` (unwieldy to scroll with
+   40+ employees) to a searchable field. First attempt used native
+   `<input list="...">` + `<datalist>`; admin flagged that a native
+   datalist popup can't be restyled with CSS at all (browser/OS-rendered,
+   outside the page), so it was replaced with a fully custom dropdown
+   (`.emp-ac-list`/`.emp-ac-item` in `style.css`, matching the app's
+   `--blue1`/`--blue2`/`--blue3` palette) built from a plain `<input>` +
+   absolutely-positioned `<div>`, filtered/rendered in JS.
+4. `614a6f3` — extended the same custom-dropdown pattern to EmployeeRates'
+   Area column: searchable dropdown sourced from `AreaCenters` (now
+   returned by `handleGetRates` as `areaCenters` — new `Code.gs` field,
+   needs the pending redeploy), and Region/Province became read-only
+   inputs that auto-fill from whichever Area is picked. This closes the
+   same typo-causes-silent-₱0-rates risk as the standardize backfill
+   above, but prevents it at data-entry time for every future edit instead
+   of needing another one-time cleanup pass.
+
+Not yet done: admin also asked (same session) to make the Employees tab's
+Add/Edit form (`openUserForm` in `admin.html`) Department field smarter —
+plain default for employees with employee-specific rates, dropdown of
+real fallback-department names otherwise. Exploration was interrupted
+mid-session; picking this up next needs `openUserForm(u)`/`loadUsers()`
+in `admin.html` and `handleCheckNameMatches`'s `rates_status` field in
+`Code.gs` for the employee-specific-vs-fallback classification.
+
 ---
 
 ## Status: app is live, expense-only (OT/UT removed), GPS-fallback area classification shipped, real per-employee rate data imported, meal-allowance incomplete-log auto-grant + admin deny override shipped, employee 3-tab self-service dashboard shipped, meal-control batching + clear status indicator shipped, receipt-photo mobile fix + admin receipt viewer/editable-claimed-amount shipped, 2026-07-03 full rate-book reimport applied live, admin Check Name Matches audit tool shipped. Ten workstreams below are DONE.
