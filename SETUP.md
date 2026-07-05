@@ -31,7 +31,7 @@ Leave the rest of the rows empty for now (users will be added later).
 
 Row 1 headers:
 ```
-employee_name | department | area | meal_amount | accom_amount | region
+employee_name | department | area | meal_amount | accom_amount | region | province
 ```
 Row semantics:
 - **Employee-specific row**: `employee_name` filled (exact match to
@@ -48,10 +48,11 @@ Row semantics:
   case-insensitively — any row whose `area` had no match was left
   untouched (not guessed).
 - `meal_amount`/`accom_amount` are plain numbers, either can be `0`.
-- `region` is backfilled from the matched `AreaCenters.region` (case-
-  insensitive lookup) — reference-only, not read by any `Code.gs` handler
-  today. Blank for any row whose `area` has no `AreaCenters` match (e.g.
-  `PROVINCIAL`, deliberately left unmapped — see `Resume.md`).
+- `region`/`province` are backfilled from the matched `AreaCenters` row
+  (case-insensitive `area` lookup) — reference-only, not read by any
+  `Code.gs` handler today. Blank for any row whose `area` has no
+  `AreaCenters` match (e.g. `PROVINCIAL`, deliberately left unmapped — see
+  `Resume.md`).
 - If no `EmployeeRates` area name's text appears inside a day's
   `destination` string (common for department-fallback rows using broad
   regional names like `"NCR AREA"`, since real attendance destinations are

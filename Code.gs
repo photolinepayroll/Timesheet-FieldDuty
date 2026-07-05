@@ -419,20 +419,21 @@ function oneTimeImportAreaCenters() {
 
 // One-time backfill (2026-07-05): standardizes EmployeeRates.area spelling
 // to match AreaCenters' canonical casing (case-insensitive lookup only —
-// never reassigns a row to a different area), and adds a new `region`
-// column backfilled from the matched AreaCenters row. Rows with no
-// case-insensitive match are left untouched (area unchanged, region blank)
-// and reported via Logger.log so the admin can review them by hand —
-// same "flag ambiguities, don't guess" convention as the 2026-07-03
-// rate-book import. Run manually once from the Apps Script editor, then
-// delete — not wired into handleSaveRates/ongoing saves.
+// never reassigns a row to a different area), and adds new `region`/
+// `province` columns backfilled from the matched AreaCenters row. Rows
+// with no case-insensitive match are left untouched (area unchanged,
+// region/province blank) and reported via Logger.log so the admin can
+// review them by hand — same "flag ambiguities, don't guess" convention
+// as the 2026-07-03 rate-book import. Run manually once from the Apps
+// Script editor, then delete — not wired into handleSaveRates/ongoing saves.
 function oneTimeStandardizeEmployeeRatesAreas() {
   var centers = sheetToObjects('AreaCenters');
   var lookup = {};
   centers.forEach(function(c) {
     lookup[String(c['area']).toLowerCase()] = {
       canonicalArea: c['area'],
-      region: c['region']
+      region: c['region'],
+      province: c['province']
     };
   });
 
@@ -445,12 +446,19 @@ function oneTimeStandardizeEmployeeRatesAreas() {
   if (regionIdx === -1) {
     regionIdx = headers.length;
     sh.getRange(1, regionIdx + 1).setValue('region');
+    headers[regionIdx] = 'region';
+  }
+  var provinceIdx = headers.indexOf('province');
+  if (provinceIdx === -1) {
+    provinceIdx = headers.length;
+    sh.getRange(1, provinceIdx + 1).setValue('province');
   }
 
   var lastRow = sh.getLastRow();
   if (lastRow < 2) return 'no data rows';
 
-  var dataRange = sh.getRange(2, 1, lastRow - 1, Math.max(sh.getLastColumn(), regionIdx + 1));
+  var lastCol = Math.max(sh.getLastColumn(), regionIdx + 1, provinceIdx + 1);
+  var dataRange = sh.getRange(2, 1, lastRow - 1, lastCol);
   var data = dataRange.getValues();
   var unmatched = [];
 
@@ -460,8 +468,10 @@ function oneTimeStandardizeEmployeeRatesAreas() {
     if (match) {
       if (row[areaIdx] !== match.canonicalArea) row[areaIdx] = match.canonicalArea;
       row[regionIdx] = match.region;
+      row[provinceIdx] = match.province;
     } else {
       row[regionIdx] = '';
+      row[provinceIdx] = '';
       unmatched.push((row[empIdx] || row[deptIdx] || '(blank)') + ': "' + area + '"');
     }
   });
@@ -469,7 +479,7 @@ function oneTimeStandardizeEmployeeRatesAreas() {
   dataRange.setValues(data);
 
   if (unmatched.length) {
-    Logger.log('Unmatched EmployeeRates areas (%s rows), left as-is, region blank:\n%s',
+    Logger.log('Unmatched EmployeeRates areas (%s rows), left as-is, region/province blank:\n%s',
       unmatched.length, unmatched.join('\n'));
   }
   return 'Standardized/backfilled ' + (data.length - unmatched.length) + ' rows, ' +
