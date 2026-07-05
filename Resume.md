@@ -14,14 +14,7 @@
    to the EXACT destination string the attendance app logs (looks like
    "Marquee ter" — verify via `getAttendance` first). Check other users for
    blank `mother_branch` too.
-2. **New broad area names need `AreaCenters` rows** for GPS-fallback
-   classification (they'll never substring-match a real destination):
-   `PROVINCIAL`, `NORTH LUZON`, `SOUTH LUZON`, `VISMIN / MINDANAO`,
-   `VIS/MIN AREA`, `OLONGAPO AREA`, `DAGUPAN AREA`, `BULACAN AREA`,
-   `PAMPANGA AREA`, `LAGUNA AREA`, `BICOL AREA`, `NCR AREA`, `CAVITE AREA`
-   (some may already exist — check the `AreaCenters` tab). Admin adds
-   `area | lat | lng` rows for whichever are missing.
-3. **Two rate-book ambiguities imported with defaults** (2026-07-03 import,
+2. **Two rate-book ambiguities imported with defaults** (2026-07-03 import,
    confirm with admin): Leah May Legaspi's R. ANTIQUE read "300/150" in the
    PDF — imported as meal 150 / accom 300 (assumed swapped columns, matching
    every sibling row); Jorwen Cacho's SM OLONGAPO CENTRAL was ambiguous —
@@ -36,6 +29,27 @@ The admin's manual fix was confirmed live (`getRates` showed 14 rows under
 under the correct name. General rule stands: **`Users.name` must always
 exactly match the literal string the attendance app logs** (case-sensitive,
 no normalization) — check `getAttendance` before "cleaning up" any spelling.
+
+**RESOLVED (2026-07-05): `AreaCenters` rows missing for broad area names.**
+The admin supplied "Coordinates Employee rates.pdf" (118 real store/mall
+branches with GPS coordinates, Province, and a simplified Region/Area tag).
+`AreaCenters` was rebuilt via a new one-time `oneTimeImportAreaCenters()`
+function in `Code.gs` (same convention as `oneTimeImportEmployeeRates` —
+run once from the Apps Script editor, not wired into `RATE_SHEET_NAMES`/
+`handleSaveRates`, `AreaCenters` stays admin-edited per `SETUP.md`). Schema
+expanded from 3 columns (`area | lat | lng`) to 5 (`area | lat | lng |
+province | region` — the two new columns are reference-only, not read by
+any handler). 132 rows total: 118 per-store rows straight from the PDF, 6
+broad-region representative points (one real named store per region:
+`NCR AREA`→SM Megamall, `CAVITE AREA`→SM Dasmariñas, `NORTH LUZON`→SM
+Clark, `SOUTH LUZON`→SM Calamba, `VISAYAS`→SM Cebu, `MINDANAO`→Abreeza
+Davao), and 8 legacy-area-name rows reusing a nearby real store's
+coordinates (`PAMPANGA AREA`→Marquee Mall, `OLONGAPO AREA`→SM Olongapo
+Central, `DAGUPAN AREA`→SM Dagupan, `BULACAN AREA`→SM Baliwag, `LAGUNA
+AREA`→SM Calamba, `BICOL AREA`→SM Legaspi, `VIS/MIN AREA`/`VISMIN /
+MINDANAO`→SM Cebu). Admin ran the import live and confirmed: header row,
+133 total rows, spot-checked coordinates all match. **`PROVINCIAL` is
+intentionally NOT mapped** — see "Known, accepted gaps" below.
 
 ---
 
@@ -551,6 +565,11 @@ d150af2 feat: remove OT/UT/Offset computation, descope app to expense-only
 - Google Sheets auto-converts date-looking text to real Date cells unless
   you prefix with `'`.
 - `resolveAreaByGPS` has no maximum-distance cutoff (see GPS section above).
+- `AreaCenters`' `PROVINCIAL` fallback area name has no coordinate row —
+  intentional, permanent gap (2026-07-05 AreaCenters rebuild): no single
+  lat/lng is sensible for a literal "any province" fallback name. If this
+  ever surfaces as a real ₱0 incident for an officer-level employee whose
+  candidate areas include `PROVINCIAL`, that's the known cause — not a bug.
 - `Claims.employee_name` and the attendance CSV's `name` field are NOT
   case-insensitive (only `EmployeeRates.employee_name` is, as of this
   session) — same risk class, explicitly left unfixed pending a real

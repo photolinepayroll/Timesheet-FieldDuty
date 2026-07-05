@@ -67,12 +67,13 @@ Pages workflow's built-in concurrency group.
 ## Open issues
 
 1. **Jude Patani's `Users.mother_branch` is blank** — mother-branch meal/accom zeroing can't fire for him; his period sheet grants meal at Marquee Mall (his mother branch). Admin must set it to the exact attendance destination string (check `getAttendance` first). Audit other users for blank mother_branch too.
-2. **AreaCenters rows missing for broad area names** from the 2026-07-03 rate import (PROVINCIAL, NORTH/SOUTH LUZON, VISMIN / MINDANAO, OLONGAPO/DAGUPAN/BULACAN/PAMPANGA/LAGUNA/BICOL AREA, …) — without them the GPS fallback can't classify those areas. Admin adds `area | lat | lng` rows.
-3. **Two rate values imported on assumption** (see Resume.md "STOP HERE FIRST"): Leah May Legaspi R. ANTIQUE 150/300 (PDF looked column-swapped), Jorwen Cacho SM OLONGAPO CENTRAL 150/0 (PDF ambiguous). Confirm with admin.
+2. **Two rate values imported on assumption** (see Resume.md "STOP HERE FIRST"): Leah May Legaspi R. ANTIQUE 150/300 (PDF looked column-swapped), Jorwen Cacho SM OLONGAPO CENTRAL 150/0 (PDF ambiguous). Confirm with admin.
 
-4. **Code.gs redeploy pending again** — workstream 10 (`checkNameMatches` admin audit tool) is committed but the live Web App doesn't have it yet.
+3. **Code.gs redeploy pending again** — several workstreams since the last confirmed redeploy (`checkNameMatches`, manual-fare-claims retirement of auto-fare, Approve Claims employee/date filters, `oneTimeImportAreaCenters`) are committed but the live Web App doesn't have them yet.
 
 Resolved 2026-07-03: Jude Patani EmployeeRates name mismatch (fixed live + reimported); prior Code.gs redeploy completed (claim_details, approve-amount write, GET/CORS routing all live). Live EmployeeRates = 245 rows from the 2026-07-03 rate-book import; pre-import backup in `Md files/2026-07-03-rates-backup-before-import.json`.
+
+Resolved 2026-07-05: **AreaCenters rows missing for broad area names** — rebuilt via `oneTimeImportAreaCenters` (`Code.gs`) using real store/mall GPS data from the admin's "Coordinates Employee rates.pdf". `AreaCenters` is now 5 columns (`area | lat | lng | province | region`, up from 3) with 132 rows: 118 per-store rows, 6 broad-region representative points, and 8 legacy-area-name rows (`PAMPANGA AREA`, `OLONGAPO AREA`, `DAGUPAN AREA`, `BULACAN AREA`, `LAGUNA AREA`, `BICOL AREA`, `VIS/MIN AREA`, `VISMIN / MINDANAO`) reusing a nearby real store's coordinates. Admin ran the import and confirmed live: header row, 133 total rows, and spot-checked coordinates all match. **`PROVINCIAL` is a permanent, intentional gap** — no single coordinate is sensible for a literal "any province" fallback name, so it's left unmapped (not a bug).
 
 ## Do not re-ask these decisions
 
