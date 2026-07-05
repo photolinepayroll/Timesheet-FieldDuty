@@ -93,7 +93,7 @@
           <label id="cl-receipt-label">Receipt Photo (optional)</label>
           <input id="cl-receipt" type="file" accept="image/*" style="margin:4px 0 12px;">
         </div>
-        <button onclick="submitClaim()" style="width:100%;">Submit Claim</button>
+        <button id="cl-submit-btn" onclick="submitClaim()" style="width:100%;">Submit Fare Expenses</button>
         <p id="cl-msg" style="margin-top:8px;color:green;"></p>
       </div>
     </div>
@@ -187,8 +187,9 @@
         dateSel.removeAttribute('disabled');
       }
       document.getElementById('cl-type').value = type;
-      document.getElementById('cl-form-title').textContent =
-        type === 'accommodation' ? 'Submit Accommodation Claim' : 'Submit Fare Claim';
+      var formCaption = type === 'accommodation' ? 'Submit Accommodation Expenses' : 'Submit Fare Expenses';
+      document.getElementById('cl-form-title').textContent = formCaption;
+      document.getElementById('cl-submit-btn').textContent = formCaption;
       // Show FROM/TO/MODE only for fare claims
       document.getElementById('cl-fare-fields').style.display =
         type === 'accommodation' ? 'none' : 'block';
