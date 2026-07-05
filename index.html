@@ -74,7 +74,12 @@
             <option value="">Select mode…</option>
             <option value="Jeepney">Jeepney</option>
             <option value="Tricycle">Tricycle</option>
+            <option value="FX">FX</option>
             <option value="Company Service">Company Service</option>
+            <option value="Bus">Bus</option>
+            <option value="Van">Van</option>
+            <option value="By Sea">By Sea</option>
+            <option value="Personal Gas Refill">Personal Gas Refill</option>
           </select>
         </div>
         <label>Amount (₱)</label>
@@ -82,7 +87,7 @@
         <label>Notes / Justification</label>
         <textarea id="cl-notes" rows="2" style="width:100%;padding:7px;margin:4px 0 10px;"></textarea>
         <div id="cl-receipt-row">
-          <label>Receipt Photo (optional)</label>
+          <label id="cl-receipt-label">Receipt Photo (optional)</label>
           <input id="cl-receipt" type="file" accept="image/*" style="margin:4px 0 12px;">
         </div>
         <button onclick="submitClaim()" style="width:100%;">Submit Claim</button>
@@ -198,10 +203,6 @@
       // Show FROM/TO/MODE only for fare claims
       document.getElementById('cl-fare-fields').style.display =
         type === 'accommodation' ? 'none' : 'block';
-      // Fare claims (Jeepney/Tricycle/Company Service) are all receipt-exempt
-      // — only Accommodation claims still show the Receipt Photo field.
-      document.getElementById('cl-receipt-row').style.display =
-        type === 'accommodation' ? 'block' : 'none';
       document.getElementById('cl-from').value   = '';
       document.getElementById('cl-to').value     = '';
       document.getElementById('cl-mode').value   = '';
@@ -210,9 +211,25 @@
       document.getElementById('cl-notes').value  = '';
       document.getElementById('cl-receipt').value = '';
       document.getElementById('cl-msg').textContent = '';
+      updateReceiptVisibility();
       var form = document.getElementById('emp-inline-claim');
       form.style.display = 'block';
       form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // Jeepney/Tricycle/FX/Company Service never issue a usable receipt —
+    // exempt. Bus/Van/By Sea/Personal Gas Refill always issue one — required.
+    // Accommodation claims keep the field visible but optional, unchanged.
+    var RECEIPT_REQUIRED_MODES = ['Bus', 'Van', 'By Sea', 'Personal Gas Refill'];
+
+    function updateReceiptVisibility() {
+      var claimType = document.getElementById('cl-type').value;
+      var mode      = document.getElementById('cl-mode').value;
+      var required  = RECEIPT_REQUIRED_MODES.indexOf(mode) !== -1;
+      var show      = claimType === 'accommodation' || required;
+      document.getElementById('cl-receipt-row').style.display = show ? 'block' : 'none';
+      document.getElementById('cl-receipt-label').textContent =
+        required ? 'Receipt Photo (required)' : 'Receipt Photo (optional)';
     }
 
     function onModeChange() {
@@ -225,6 +242,7 @@
         amountEl.removeAttribute('readonly');
         if (amountEl.value === '0') amountEl.value = '';
       }
+      updateReceiptVisibility();
     }
 
     function hideClaimForm() {
@@ -251,6 +269,11 @@
         return;
       }
       if (isNaN(amount)) amount = 0;
+      if (claimType === 'special-fare' && RECEIPT_REQUIRED_MODES.indexOf(mode) !== -1 &&
+          !document.getElementById('cl-receipt').files[0]) {
+        alert('Receipt photo is required for ' + mode + '.');
+        return;
+      }
       var config = getStoredConfig();
       var claim = {
         employee_name:   user.name,
