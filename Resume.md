@@ -39,17 +39,38 @@ run once from the Apps Script editor, not wired into `RATE_SHEET_NAMES`/
 `handleSaveRates`, `AreaCenters` stays admin-edited per `SETUP.md`). Schema
 expanded from 3 columns (`area | lat | lng`) to 5 (`area | lat | lng |
 province | region` — the two new columns are reference-only, not read by
-any handler). 132 rows total: 118 per-store rows straight from the PDF, 6
+any handler). 135 rows total: 118 per-store rows straight from the PDF, 6
 broad-region representative points (one real named store per region:
 `NCR AREA`→SM Megamall, `CAVITE AREA`→SM Dasmariñas, `NORTH LUZON`→SM
 Clark, `SOUTH LUZON`→SM Calamba, `VISAYAS`→SM Cebu, `MINDANAO`→Abreeza
-Davao), and 8 legacy-area-name rows reusing a nearby real store's
+Davao), 8 legacy-area-name rows reusing a nearby real store's
 coordinates (`PAMPANGA AREA`→Marquee Mall, `OLONGAPO AREA`→SM Olongapo
 Central, `DAGUPAN AREA`→SM Dagupan, `BULACAN AREA`→SM Baliwag, `LAGUNA
 AREA`→SM Calamba, `BICOL AREA`→SM Legaspi, `VIS/MIN AREA`/`VISMIN /
-MINDANAO`→SM Cebu). Admin ran the import live and confirmed: header row,
-133 total rows, spot-checked coordinates all match. **`PROVINCIAL` is
-intentionally NOT mapped** — see "Known, accepted gaps" below.
+MINDANAO`→SM Cebu), and 3 rows added after the first live run surfaced
+real unmatched `EmployeeRates.area` values (`NCR BRANCH`→same as NCR AREA,
+`VISAYAS / MINDANAO`→same as VISMIN / MINDANAO, `RIZAL AREA`→SM Masinag).
+Admin ran the import live and confirmed: header row, 136 total rows,
+spot-checked coordinates all match. **`PROVINCIAL` is intentionally NOT
+mapped** — see "Known, accepted gaps" below.
+
+**RESOLVED (2026-07-05): EmployeeRates area standardization + region/
+province backfill.** `oneTimeStandardizeEmployeeRatesAreas` (`Code.gs`)
+case-insensitively matches each `EmployeeRates.area` value against
+`AreaCenters`, corrects casing/spelling to the canonical form (never
+reassigns to a different area), and adds two new columns — `region` and
+`province` — backfilled from the matched `AreaCenters` row.
+`EmployeeRates` is now 7 columns: `employee_name | department | area |
+meal_amount | accom_amount | region | province`. Admin ran it live twice
+(once before, once after the 3 AreaCenters rows above were added): final
+result — 236 rows standardized/backfilled, 9 unmatched (7 `PROVINCIAL`
+rows, same permanent gap as `AreaCenters`; 2 fully-blank rows the admin
+confirmed were stray placeholders and intentionally deleted). No
+computed meal/accom amounts changed for any employee — matching was
+already case-insensitive before this pass, so this was spelling cleanup
+and column addition only, not a rate change. `region`/`province` are
+reference-only for now, not read by any `Code.gs` handler — prep for a
+future frontend feature.
 
 ---
 
