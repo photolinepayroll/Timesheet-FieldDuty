@@ -49,12 +49,12 @@
     </div>
 
     <div class="emp-tabs">
-      <button class="emp-tab active" id="tab-btn-sheet"      onclick="switchTab('sheet')">My Sheet</button>
-      <button class="emp-tab"        id="tab-btn-claims"     onclick="switchTab('claims')">My Claims</button>
+      <button class="emp-tab active" id="tab-btn-sheet"      onclick="switchTab('sheet')">Timesheet</button>
+      <button class="emp-tab"        id="tab-btn-claims"     onclick="switchTab('claims')">Expense Claims</button>
       <button class="emp-tab"        id="tab-btn-attendance" onclick="switchTab('attendance')">Attendance</button>
     </div>
 
-    <!-- Tab 1: My Sheet -->
+    <!-- Tab 1: Timesheet -->
     <div id="tab-sheet">
       <div id="emp-period-sheet"><p style="color:#888;">Select a date range above and click Load.</p></div>
 
@@ -96,15 +96,9 @@
         <button onclick="submitClaim()" style="width:100%;">Submit Claim</button>
         <p id="cl-msg" style="margin-top:8px;color:green;"></p>
       </div>
-
-      <!-- Fallback: pick any date already in the loaded period sheet -->
-      <div style="margin-top:20px;">
-        <button onclick="openClaimForAnyDate()" style="font-size:.85em;">+ Add Claim for Another Day</button>
-        <span style="margin-left:10px;font-size:.82em;color:#666;">Pick any date from your loaded period sheet</span>
-      </div>
     </div>
 
-    <!-- Tab 2: My Claims -->
+    <!-- Tab 2: Expense Claims -->
     <div id="tab-claims" style="display:none;">
       <div id="emp-claims-list"><p style="color:#888;">Select a date range above and click Load.</p></div>
     </div>
@@ -179,14 +173,6 @@
     }
 
     // ---- Inline claim form ----
-    function openClaimForAnyDate() {
-      if (!window._lastPeriodSheet) {
-        alert('Load your period sheet first.');
-        return;
-      }
-      openClaimForm('', 'special-fare');
-    }
-
     function openClaimForm(date, type) {
       var sheet   = window._lastPeriodSheet;
       var dates   = sheet ? sheet.rows.map(function(r) { return r.date; }) : [];
@@ -396,7 +382,7 @@
       });
     }
 
-    // ---- My Claims tab ----
+    // ---- Expense Claims tab ----
     function loadMyClaims(user) {
       var out = document.getElementById('emp-claims-list');
       out.innerHTML = '<p>Loading your claims…</p>';
