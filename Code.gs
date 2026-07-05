@@ -800,10 +800,6 @@ function handleGetPeriodSheet(payload) {
     var specialAccom = daySpecial.filter(function(c) { return c['type']==='accommodation'; })
                                  .reduce(function(s,c) { return s + parseFloat(c['claimed_amount']||0); }, 0);
 
-    // Auto-fare (LTFRB computed) — reuse buildAutoFareClaim (Task 6) rather than
-    // re-deriving the round-trip-doubled fare logic inline. buildAutoFareClaim
-    // itself does not know about mother-branch — that gate is enforced here,
-    // matching the original inline draft's behavior (no auto-fare at mother branch).
     var hasCompanyService = companyServiceClaims.some(function(c) {
       return claimDateKey(c['date']) === date;
     });
