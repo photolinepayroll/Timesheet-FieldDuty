@@ -91,6 +91,21 @@
     <!-- Tab: Approve Claims -->
     <div id="tab-claims" class="tab-panel" style="display:none;">
       <div class="section-title">Pending Claims — Approval Queue</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-end;">
+        <div>
+          <label>Employee</label><br>
+          <select id="claims-employee" style="padding:7px;min-width:200px;"><option value="">All employees</option></select>
+        </div>
+        <div>
+          <label>From</label><br>
+          <input id="claims-start" type="date" style="padding:7px;">
+        </div>
+        <div>
+          <label>To</label><br>
+          <input id="claims-end" type="date" style="padding:7px;">
+        </div>
+        <button onclick="loadClaims()" style="padding:7px 16px;">Filter</button>
+      </div>
       <div class="table-scroll">
         <table id="claims-table">
           <thead><tr>
@@ -188,8 +203,11 @@
           document.getElementById('tab-' + btn.dataset.tab).style.display = 'block';
           if (btn.dataset.tab === 'employees') loadUsers();
           if (btn.dataset.tab === 'rates') loadRates();
-          if (btn.dataset.tab === 'claims') loadClaims();
-          if (btn.dataset.tab === 'periods') populateEmployeeDropdown();
+          if (btn.dataset.tab === 'claims') {
+            populateEmployeeDropdown(document.getElementById('claims-employee'), true);
+            loadClaims();
+          }
+          if (btn.dataset.tab === 'periods') populateEmployeeDropdown(document.getElementById('ps-employee'), false);
         });
       });
     }
@@ -558,9 +576,33 @@
     }
 
     // ---- Approve Claims ----
+    // Approved/Rejected rows stay visible after an in-place update (see
+    // approveReject() below) instead of vanishing on refresh, so the
+    // Status badge must reflect the claim's actual status, not always
+    // "pending" (harmless before this change, since every row loaded here
+    // was always status==='Submitted').
+    function statusBadgeClass(status) {
+      if (status === 'Approved') return 'badge-approved';
+      if (status === 'Rejected') return 'badge-rejected';
+      return 'badge-pending';
+    }
+
     function loadClaims() {
-      api('getClaims', { status: 'Submitted' }, function(err, claims) {
+      var payload = { status: 'Submitted' };
+      var emp   = document.getElementById('claims-employee').value;
+      var start = document.getElementById('claims-start').value;
+      var end   = document.getElementById('claims-end').value;
+      if (emp)   payload.employee_name = emp;
+      if (start) payload.date_start = start;
+      if (end)   payload.date_end   = end;
+      api('getClaims', payload, function(err, claims) {
         if (err) { alert(err.message); return; }
+        // Sorted by employee, then date within each employee, for easier
+        // review of one employee's claims together.
+        claims.sort(function(a, b) {
+          if (a.employee_name !== b.employee_name) return a.employee_name < b.employee_name ? -1 : 1;
+          return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0);
+        });
         var tbody = document.getElementById('claims-tbody');
         tbody.innerHTML = '';
         window._lastClaims = claims; // keyed lookup for viewReceipt(), avoids inlining base64 into onclick
@@ -570,6 +612,14 @@
         }
         claims.forEach(function(c) {
           var tr = document.createElement('tr');
+          // Lets approveReject() find and update this exact row in place
+          // afterward, instead of reloading (which would drop it, since
+          // the default query above is always status:'Submitted').
+          tr.setAttribute('data-row-id', c.id);
+          var actionsCell = c.status === 'Submitted'
+            ? '<button onclick="approveReject(\'' + c.id + '\',\'approve\')" style="background:#27ae60;color:#fff;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;margin-right:4px;">✓ Approve</button>' +
+              '<button onclick="approveReject(\'' + c.id + '\',\'reject\')" style="background:#e74c3c;color:#fff;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;">✗ Reject</button>'
+            : '';
           tr.innerHTML =
             '<td>' + escapeHtml(c.employee_name) + '</td>' +
             '<td>' + escapeHtml(c.date) + '</td>' +
@@ -586,7 +636,7 @@
             '<td><input type="number" class="claim-amount-input" data-claim-id="' + c.id + '" value="' + Number(c.claimed_amount || 0) + '" style="width:80px;padding:3px;"></td>' +
             '<td>' + (c.receipt_url ? '<button onclick="viewReceipt(\'' + c.id + '\')" style="padding:4px 8px;">📷 View</button>' : '—') + '</td>' +
             '<td><span class="badge-' + (c.gps_check==='ok'?'auto':'flagged') + '">' + escapeHtml(c.gps_check) + '</span></td>' +
-            '<td><span class="badge-pending">' + escapeHtml(c.status) + '</span></td>' +
+            '<td><span class="' + statusBadgeClass(c.status) + '">' + escapeHtml(c.status) + '</span></td>' +
             '<td>' + escapeHtml(c.notes) + '</td>' +
             // c.id is server-generated ('C' + Date.now(), see handleSaveClaim) —
             // always plain digits/letters, never employee-authored text, so it's
@@ -596,10 +646,7 @@
             // onclick as JS, so an escaped &#39; would just decode back to '
             // and still close the string early — this sink needs a different
             // defense than HTML-entity escaping.)
-            '<td style="white-space:nowrap;">' +
-              '<button onclick="approveReject(\'' + c.id + '\',\'approve\')" style="background:#27ae60;color:#fff;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;margin-right:4px;">✓ Approve</button>' +
-              '<button onclick="approveReject(\'' + c.id + '\',\'reject\')" style="background:#e74c3c;color:#fff;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;">✗ Reject</button>' +
-            '</td>';
+            '<td style="white-space:nowrap;">' + actionsCell + '</td>';
           tbody.appendChild(tr);
         });
       });
@@ -627,7 +674,17 @@
       }
       api('approveClaim', payload, function(err) {
         if (err) { alert(err.message); return; }
-        loadClaims(); // refresh
+        // Update this row in place rather than calling loadClaims() again —
+        // a full reload re-queries status:'Submitted' only, which would
+        // make the row the admin just acted on disappear immediately
+        // instead of showing its new status.
+        var newStatus = action === 'approve' ? 'Approved' : 'Rejected';
+        var tr = document.querySelector('tr[data-row-id="' + claimId + '"]');
+        if (tr) {
+          var cells = tr.querySelectorAll('td');
+          cells[10].innerHTML = '<span class="' + statusBadgeClass(newStatus) + '">' + newStatus + '</span>';
+          cells[12].innerHTML = ''; // Actions cell — nothing left to act on
+        }
       });
     }
 
@@ -644,16 +701,19 @@
     }
 
     // ---- Period Sheets ----
-    function populateEmployeeDropdown() {
+    // Shared by the Period Sheets tab (#ps-employee, no "All employees"
+    // option — a single employee must always be picked there) and the
+    // Approve Claims tab (#claims-employee, includeAllOption=true, since
+    // leaving it on "All employees" is the default/normal filter state).
+    function populateEmployeeDropdown(selectEl, includeAllOption) {
       api('getUsers', {}, function(err, users) {
         if (err) return;
-        var sel = document.getElementById('ps-employee');
-        sel.innerHTML = '';
+        selectEl.innerHTML = includeAllOption ? '<option value="">All employees</option>' : '';
         users.filter(function(u){ return u.active === true || u.active === 'TRUE'; })
              .forEach(function(u) {
                var opt = document.createElement('option');
                opt.value = u.name; opt.textContent = u.name + ' (' + u.department + ')';
-               sel.appendChild(opt);
+               selectEl.appendChild(opt);
              });
       });
     }

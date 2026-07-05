@@ -534,11 +534,19 @@ function handleGetConfig(payload) {
 // ============================================================
 
 function handleGetClaims(payload) {
-  // payload: { status (optional), employee_name (optional) }
+  // payload: { status (optional), employee_name (optional),
+  //            date_start (optional), date_end (optional) }
   var claims = sheetToObjects('Claims');
+  var startKey = payload.date_start ? claimDateKey(payload.date_start) : null;
+  var endKey   = payload.date_end   ? claimDateKey(payload.date_end)   : null;
   return claims.filter(function(c) {
     if (payload.status && c['status'] !== payload.status) return false;
     if (payload.employee_name && c['employee_name'] !== payload.employee_name) return false;
+    if (startKey || endKey) {
+      var cKey = claimDateKey(c['date']);
+      if (startKey && cKey < startKey) return false;
+      if (endKey   && cKey > endKey)   return false;
+    }
     return true;
   });
 }

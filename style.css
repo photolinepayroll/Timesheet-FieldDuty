@@ -79,6 +79,7 @@ tr:nth-child(even) { background: #f5f5f5; }
 .badge-pending { background: #e67e22; color:#fff; border-radius:3px; padding:2px 6px; font-size:11px; }
 .badge-approved { background: #2980b9; color:#fff; border-radius:3px; padding:2px 6px; font-size:11px; }
 .badge-flagged { background: #e74c3c; color:#fff; border-radius:3px; padding:2px 6px; font-size:11px; }
+.badge-rejected { background: #e74c3c; color:#fff; border-radius:3px; padding:2px 6px; font-size:11px; }
 
 /* ---------- Section headings ---------- */
 
