@@ -807,14 +807,12 @@ function handleGetPeriodSheet(payload) {
     var hasCompanyService = companyServiceClaims.some(function(c) {
       return claimDateKey(c['date']) === date;
     });
+    // Auto-fare (GPS distance + LTFRB formula) retired 2026-07-05 — fare is
+    // now always a manual employee claim (special-fare, vehicle_mode
+    // Jeepney/Tricycle/Company Service). computeFare()/buildAutoFareClaim()
+    // are left defined but unused; see
+    // docs/superpowers/specs/2026-07-05-manual-fare-claims-design.md.
     var autoFare = 0;
-    if (!hasCompanyService && emp['mother_branch'] !== destination) {
-      // Default vehicle type: Traditional Jeepney — employee can override
-      // via special claim; auto-fare uses the cheapest standard mode.
-      var claimResult = buildAutoFareClaim(day, 'Traditional Jeepney',
-        payload.employee_name, date, payload.period_start, payload.period_end);
-      autoFare = claimResult ? claimResult.computed_amount : 0;
-    }
 
     rows.push({
       date:         date,
