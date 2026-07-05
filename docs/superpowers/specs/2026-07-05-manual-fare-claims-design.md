@@ -4,6 +4,17 @@
 GitHub until the admin explicitly says to deploy (per this session's working
 agreement).
 
+**Addendum (2026-07-05, same day):** the admin asked to expand the Vehicle/
+Mode dropdown beyond Jeepney/Tricycle/Company Service. Final dropdown:
+Jeepney, Tricycle, FX, Company Service (all receipt-exempt, unchanged from
+above) plus **Bus, Van, By Sea, Personal Gas Refill** — these four are new
+and, unlike every other mode, **require** a receipt photo before submit
+(client-side `alert` block in `submitClaim()`, plus the Receipt Photo field
+becomes visible again and its label switches to "(required)" via a shared
+`updateReceiptVisibility()` helper called from both `openClaimForm` and
+`onModeChange`). Accommodation claims are unaffected — Receipt Photo there
+stays visible-but-optional, as it always was.
+
 ## Why
 
 The admin wants employees to manually enter their fare instead of relying on
