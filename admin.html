@@ -97,7 +97,8 @@
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-end;">
         <div>
           <label>Employee</label><br>
-          <select id="claims-employee" style="padding:7px;min-width:200px;"><option value="">All employees</option></select>
+          <input id="claims-employee" list="claims-employee-list" placeholder="All employees" style="padding:7px;min-width:200px;">
+          <datalist id="claims-employee-list"></datalist>
         </div>
         <div>
           <label>From</label><br>
@@ -128,7 +129,8 @@
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;align-items:flex-end;">
         <div>
           <label>Employee</label><br>
-          <select id="ps-employee" style="padding:7px;min-width:200px;"></select>
+          <input id="ps-employee" list="ps-employee-list" placeholder="Select employee…" style="padding:7px;min-width:200px;">
+          <datalist id="ps-employee-list"></datalist>
         </div>
         <div>
           <label>Period Start</label><br>
@@ -207,10 +209,10 @@
           if (btn.dataset.tab === 'employees') loadUsers();
           if (btn.dataset.tab === 'rates') loadRates();
           if (btn.dataset.tab === 'claims') {
-            populateEmployeeDropdown(document.getElementById('claims-employee'), true);
+            populateEmployeeDropdown(document.getElementById('claims-employee-list'));
             loadClaims();
           }
-          if (btn.dataset.tab === 'periods') populateEmployeeDropdown(document.getElementById('ps-employee'), false);
+          if (btn.dataset.tab === 'periods') populateEmployeeDropdown(document.getElementById('ps-employee-list'));
         });
       });
     }
@@ -699,19 +701,24 @@
     }
 
     // ---- Period Sheets ----
-    // Shared by the Period Sheets tab (#ps-employee, no "All employees"
-    // option — a single employee must always be picked there) and the
-    // Approve Claims tab (#claims-employee, includeAllOption=true, since
-    // leaving it on "All employees" is the default/normal filter state).
-    function populateEmployeeDropdown(selectEl, includeAllOption) {
+    // Shared by the Period Sheets tab (#ps-employee-list) and the Approve
+    // Claims tab (#claims-employee-list). Both employee fields are
+    // <input list="..."> + <datalist> rather than <select> — a plain
+    // <select> gets unwieldy to scroll through with 40+ employees; the
+    // datalist gives native type-to-filter behavior in every browser with
+    // no extra library. Leaving the input blank still means "no filter"
+    // (Approve Claims) or "nothing chosen yet" (Period Sheets, which
+    // already requires picking one via generatePeriodSheet's own
+    // validation) — same net behavior as the old empty-string <option>.
+    function populateEmployeeDropdown(datalistEl) {
       api('getUsers', {}, function(err, users) {
         if (err) return;
-        selectEl.innerHTML = includeAllOption ? '<option value="">All employees</option>' : '';
+        datalistEl.innerHTML = '';
         users.filter(function(u){ return u.active === true || u.active === 'TRUE'; })
              .forEach(function(u) {
                var opt = document.createElement('option');
-               opt.value = u.name; opt.textContent = u.name + ' (' + u.department + ')';
-               selectEl.appendChild(opt);
+               opt.value = u.name; opt.label = u.name + ' (' + u.department + ')';
+               datalistEl.appendChild(opt);
              });
       });
     }
