@@ -62,6 +62,19 @@ function claimDateKey(v) {
   return String(v).slice(0, 10);
 }
 
+// Same Sheets Date-cell-coercion problem as claimDateKey above, but for a
+// FULL "YYYY-MM-DD HH:MM:SS"-shaped value where the time-of-day must be
+// preserved (claimDateKey deliberately truncates to just the date, which
+// would collapse every ShiftSelections timestamp on a given day to the
+// same key).
+function normalizeTimestampCell(v) {
+  if (!v) return '';
+  if (v instanceof Date) {
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  }
+  return String(v);
+}
+
 // Single source of truth for action dispatch, shared by doGet and doPost.
 // `get: true` marks actions safe to expose over GET: read-only, and their
 // request payload is always a few short strings (never a base64 photo or a
@@ -86,6 +99,7 @@ var HANDLERS = {
   'approveClaim':     { fn: handleApproveClaim,    get: false },
   'getPeriodSheet':   { fn: handleGetPeriodSheet,  get: true  },
   'toggleMealDenial': { fn: handleToggleMealDenial, get: false },
+  'saveShiftSelection': { fn: handleSaveShiftSelection, get: false },
   'checkNameMatches': { fn: handleCheckNameMatches, get: true  }
 };
 
@@ -875,6 +889,46 @@ function handleToggleMealDenial(payload) {
   return { denied: true };
 }
 
+// The raw GPS-log Log-In/Log-Out pairing for a day can be ambiguous or
+// wrong (stray/orphan logs — see handleGetPeriodSheet's segments[] KNOWN
+// ISSUE comment below) — this lets the employee explicitly pick which raw
+// log is their real Start Shift and which is their real End Shift for a
+// given date, overriding the auto-derived first-in/last-out used for
+// hours/meal/accom/midnight. Upsert keyed on (employee_name, date),
+// case-sensitive — same convention as handleToggleMealDenial, since this
+// is written by the app from an already-resolved session name, never
+// hand-typed. Always writes both timestamps together (the frontend always
+// sends the current value of both dropdowns on any change), not a partial
+// patch.
+function handleSaveShiftSelection(payload) {
+  // payload: { employee_name, date, start_timestamp, end_timestamp }
+  var sh = getSheet('ShiftSelections');
+  var rows = sh.getDataRange().getValues();
+  var headers = rows[0];
+  var nameIdx  = headers.indexOf('employee_name');
+  var dateIdx  = headers.indexOf('date');
+  var startIdx = headers.indexOf('start_timestamp');
+  var endIdx   = headers.indexOf('end_timestamp');
+  var updIdx   = headers.indexOf('updated_at');
+  var dateKey  = claimDateKey(payload.date);
+  var now      = new Date().toISOString();
+
+  for (var i = 1; i < rows.length; i++) {
+    if (rows[i][nameIdx] === payload.employee_name &&
+        claimDateKey(rows[i][dateIdx]) === dateKey) {
+      sh.getRange(i + 1, startIdx + 1).setValue(payload.start_timestamp || '');
+      sh.getRange(i + 1, endIdx   + 1).setValue(payload.end_timestamp   || '');
+      sh.getRange(i + 1, updIdx   + 1).setValue(now);
+      return { saved: true };
+    }
+  }
+  sh.appendRow([
+    payload.employee_name, payload.date,
+    payload.start_timestamp || '', payload.end_timestamp || '', now
+  ]);
+  return { saved: true };
+}
+
 // ============================================================
 // PERIOD SHEET — assembled from attendance + auto-allowances + approved claims
 // ============================================================
@@ -1009,6 +1063,22 @@ function handleGetPeriodSheet(payload) {
     }
   });
 
+  // Employee Start/End Shift override — lets the employee pick which raw
+  // Log In/Log Out is their real start/end for a date, instead of trusting
+  // the auto-derived first-in/last-out (see handleSaveShiftSelection above).
+  // Indexed by date key for O(1) per-day lookup, same reasoning as
+  // deniedDates above.
+  var shiftSelections = sheetToObjects('ShiftSelections');
+  var shiftOverrides = {}; // dateKey -> { start_timestamp, end_timestamp }
+  shiftSelections.forEach(function(s) {
+    if (s['employee_name'] === payload.employee_name) {
+      shiftOverrides[claimDateKey(s['date'])] = {
+        start_timestamp: normalizeTimestampCell(s['start_timestamp']),
+        end_timestamp:   normalizeTimestampCell(s['end_timestamp'])
+      };
+    }
+  });
+
   var rows = [];
   var dates = Object.keys(dayMap).sort();
 
@@ -1019,6 +1089,42 @@ function handleGetPeriodSheet(payload) {
     var firstIn  = day.in_record  ? new Date(day.in_record.timestamp)  : null;
     var lastOut  = day.out_record ? new Date(day.out_record.timestamp) : null;
 
+    // Employee Start/End Shift override resolution — must happen BEFORE the
+    // 20-hour cap and hoursWorked/meal/accom/midnight computation below, so
+    // every one of those becomes override-aware automatically with no
+    // further branching. day_ins/day_outs expose every raw Log In/Log Out
+    // timestamp for this date so the frontend's Start/End Shift dropdowns
+    // have real candidates to offer. If a previously-saved override
+    // timestamp no longer matches any of this date's actual logs (e.g. the
+    // attendance data was re-synced), silently fall back to the auto-
+    // default rather than erroring the whole period sheet — consistent
+    // with this file's existing defensive style (resolveEmployeeRate,
+    // resolveAreaByGPS both return null rather than throw on a miss).
+    var dayIns  = day.ins.map(function(r)  { return { timestamp: r.timestamp, label: new Date(r.timestamp).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}) }; });
+    var dayOuts = day.outs.map(function(r) { return { timestamp: r.timestamp, label: new Date(r.timestamp).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}) }; });
+
+    var shiftOverride = shiftOverrides[date];
+    var shiftSource = 'auto'; // 'auto' | 'override'
+    if (shiftOverride) {
+      if (shiftOverride.start_timestamp) {
+        var ovIn = day.ins.filter(function(r) { return r.timestamp === shiftOverride.start_timestamp; })[0];
+        if (ovIn) { firstIn = new Date(ovIn.timestamp); day.in_record = ovIn; shiftSource = 'override'; }
+      }
+      if (shiftOverride.end_timestamp) {
+        var ovOut = day.outs.filter(function(r) { return r.timestamp === shiftOverride.end_timestamp; })[0];
+        if (ovOut) { lastOut = new Date(ovOut.timestamp); day.out_record = ovOut; shiftSource = 'override'; }
+      }
+    }
+
+    // KNOWN ISSUE: the segments[] block below zips day.ins/day.outs purely
+    // by array position after independently deduping each array, which can
+    // pair an unrelated orphan log into the wrong "segment" (e.g. end time
+    // earlier than start time) when a day has stray logs. This is a
+    // separate, pre-existing bug in the per-segment fare-claim feature
+    // (FROM/TO/MODE/FARE AMT below) — intentionally NOT fixed here; the
+    // Start/End Shift override above only affects the day-level
+    // firstIn/lastOut used for HRS/MEAL/ACCOM/MIDNIGHT/DAY-count.
+    //
     // Itemized per-location segments — additive, does NOT replace the
     // first-in/last-out day-level fields above (those still drive meal/
     // accom/midnight/area resolution exactly as before). Lets an employee
@@ -1129,6 +1235,11 @@ function handleGetPeriodSheet(payload) {
       accom:        accom + specialAccom,
       midnight:     midnight,
       total_allowance: (autoFare + specialFare) + meal + (accom + specialAccom) + midnight,
+      day_ins:      dayIns,
+      day_outs:     dayOuts,
+      shift_source: shiftSource,
+      time_in_raw:  day.in_record  ? day.in_record.timestamp  : '',
+      time_out_raw: day.out_record ? day.out_record.timestamp : '',
       segments: segments,
       claim_details: specialClaimsAll
         .filter(function(c) { return claimDateKey(c['date']) === date; })

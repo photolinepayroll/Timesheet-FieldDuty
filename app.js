@@ -103,6 +103,24 @@ function escapeHtml(str) {
 }
 
 // ---- Period Sheet rendering ----
+// Builds the Start Shift / End Shift <select> for a day (employeeControls
+// only) — options come from that date's actual raw Log In/Log Out
+// timestamps (r.day_ins/r.day_outs), so the employee can only ever pick a
+// real logged event, never type an arbitrary time. Pre-selects whichever
+// timestamp is currently in effect (r.time_in_raw/r.time_out_raw — the
+// employee's saved override if one exists, otherwise the day's auto-
+// default first-in/last-out).
+function renderShiftSelect(r, which) {
+  var options = which === 'start' ? (r.day_ins || []) : (r.day_outs || []);
+  var current = which === 'start' ? r.time_in_raw : r.time_out_raw;
+  var cls     = which === 'start' ? 'shift-start-select' : 'shift-end-select';
+  var opts = '<option value="">-</option>' + options.map(function(o) {
+    var sel = (o.timestamp === current) ? ' selected' : '';
+    return '<option value="' + escapeHtml(o.timestamp) + '"' + sel + '>' + escapeHtml(o.label) + '</option>';
+  }).join('');
+  return '<select class="' + cls + '" data-date="' + escapeHtml(r.date) + '">' + opts + '</select>';
+}
+
 // Pure sheet -> HTML string function, shared by index.html (employee
 // self-service view) and admin.html (Period Sheets tab). Relies only on
 // escapeHtml() and formatCurrency() above.
@@ -111,17 +129,40 @@ function renderPeriodSheet(sheet, opts) {
   var adminControls    = !!opts.adminControls;
   var employeeControls = !!opts.employeeControls;
   var e = sheet.employee;
+  // Days-worked/total-hours summary + DAY-column numbering — employee view
+  // only, purely derived from the day-level hours_worked field (already
+  // zeroed by the backend whenever a day's effective first-in/last-out
+  // pairing is incomplete, whether auto-derived or employee-overridden), so
+  // this stays on the same day-level footing as the rest of the sheet's
+  // day-level columns. dayNumbers only gets an entry for a RESOLVED date
+  // (hours_worked > 0) — an unresolved date in between simply has no entry,
+  // so the next resolved date continues the count rather than reserving a
+  // number for it.
+  var daysWorked = 0, totalHours = 0, dayNumbers = {};
+  if (employeeControls) {
+    var dayCounter = 0;
+    sheet.rows.forEach(function(r) {
+      totalHours += (r.hours_worked || 0);
+      if (r.hours_worked > 0) {
+        daysWorked++;
+        dayCounter++;
+        dayNumbers[r.date] = dayCounter;
+      }
+    });
+  }
   var html = '<div id="printable-sheet">';
   html += '<div style="display:flex;justify-content:space-between;margin-bottom:12px;">';
   html += '<div><b>NAME:</b> ' + escapeHtml(e.name) + '<br><b>POSITION:</b> ' + escapeHtml(e.position_level) +
           '<br><b>DEPT:</b> ' + escapeHtml(e.department) + '</div>';
   html += '<div style="text-align:right;"><b>PERIOD:</b> ' + escapeHtml(sheet.period_start) + ' — ' + escapeHtml(sheet.period_end) + '<br>' +
-          '<b>MOTHER BRANCH:</b> ' + escapeHtml(e.mother_branch) + '</div>';
+          '<b>MOTHER BRANCH:</b> ' + escapeHtml(e.mother_branch) +
+          (employeeControls ? '<br><b>DAYS WORKED:</b> ' + daysWorked + '<br><b>TOTAL HOURS:</b> ' + totalHours.toFixed(1) : '') +
+          '</div>';
   html += '</div>';
   html += '<div class="table-scroll"><table>';
   if (employeeControls) {
     html += '<thead><tr>' +
-      '<th>DATE</th><th>BRANCH</th><th>IN</th><th>OUT</th><th>HRS</th>' +
+      '<th>DAY</th><th>DATE</th><th>BRANCH</th><th>START SHIFT</th><th>END SHIFT</th><th>HRS</th>' +
       '<th>FROM</th><th>TO</th><th>MODE</th><th>FARE AMT</th>' +
       '<th>MEAL</th><th>ACCOM</th><th>MIDNIGHT</th><th>TOTAL</th>' +
       '<th>FARE CLAIM</th><th>ACCOM CLAIM</th>' +
@@ -149,11 +190,24 @@ function renderPeriodSheet(sheet, opts) {
     segments.forEach(function(seg, si) {
       html += '<tr>';
       if (si === 0) {
+        if (employeeControls) {
+          html += '<td rowspan="' + segments.length + '">' + (dayNumbers[r.date] || '') + '</td>';
+        }
         html += '<td rowspan="' + segments.length + '">' + escapeHtml(r.date) + '</td>';
         html += '<td rowspan="' + segments.length + '">' + escapeHtml(r.branch) + '</td>';
       }
-      html += '<td>' + escapeHtml(seg ? seg.time_in  : r.time_in)  + '</td>';
-      html += '<td>' + escapeHtml(seg ? seg.time_out : r.time_out) + '</td>';
+      if (employeeControls) {
+        // Start/End Shift are day-level (the employee's selection applies
+        // to the whole day, not per-segment) — shown once, spanning every
+        // segment row of that day, same as DATE/BRANCH above.
+        if (si === 0) {
+          html += '<td rowspan="' + segments.length + '">' + renderShiftSelect(r, 'start') + '</td>';
+          html += '<td rowspan="' + segments.length + '">' + renderShiftSelect(r, 'end')   + '</td>';
+        }
+      } else {
+        html += '<td>' + escapeHtml(seg ? seg.time_in  : r.time_in)  + '</td>';
+        html += '<td>' + escapeHtml(seg ? seg.time_out : r.time_out) + '</td>';
+      }
       if (si === 0) {
         html += '<td rowspan="' + segments.length + '">' + r.hours_worked + '</td>';
       }
@@ -244,7 +298,7 @@ function renderPeriodSheet(sheet, opts) {
   var t = sheet.totals;
   if (employeeControls) {
     html += '<tr style="font-weight:bold;background:var(--blue2);color:#fff;">' +
-      '<td colspan="5">TOTALS</td>' +
+      '<td colspan="6">TOTALS</td>' +
       '<td colspan="3"></td>' +
       '<td>' + formatCurrency(t.total_fare) + '</td>' +
       '<td>' + formatCurrency(t.meal) + '</td>' +

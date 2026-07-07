@@ -144,7 +144,41 @@
         if (!btn) return;
         openClaimForm(btn.dataset.date, btn.dataset.type, btn.dataset.seg);
       });
+
+      // Event delegation for the Start Shift / End Shift dropdowns — a
+      // change on either one sends BOTH selects' current values for that
+      // date together (saveShiftSelection always upserts the full pair,
+      // not a partial patch — see Code.gs's handleSaveShiftSelection).
+      document.getElementById('emp-period-sheet').addEventListener('change', function(ev) {
+        var sel = ev.target.closest('.shift-start-select, .shift-end-select');
+        if (!sel) return;
+        var date     = sel.dataset.date;
+        var startSel = document.querySelector('.shift-start-select[data-date="' + date + '"]');
+        var endSel   = document.querySelector('.shift-end-select[data-date="'   + date + '"]');
+        saveShiftSelection(date, startSel ? startSel.value : '', endSel ? endSel.value : '');
+      });
     });
+
+    // ---- Start Shift / End Shift manual selection ----
+    function saveShiftSelection(date, startTs, endTs) {
+      var user = currentUser();
+      api('saveShiftSelection', {
+        employee_name:    user.name,
+        date:             date,
+        start_timestamp:  startTs,
+        end_timestamp:    endTs
+      }, function(err) {
+        if (err) { alert(err.message); return; }
+        // Reload so HRS/MEAL/ACCOM/MIDNIGHT/DAY# all recompute server-side
+        // from the newly-saved pair, same reload-after-save pattern used
+        // after submitting a claim.
+        var cfg = window._plConfig || {};
+        loadEmployeePeriodSheet(user, {
+          period_start: cfg.period_start || document.getElementById('inp-period-start').value,
+          period_end:   cfg.period_end   || document.getElementById('inp-period-end').value
+        });
+      });
+    }
 
     // ---- Tab switching ----
     function switchTab(tab) {
