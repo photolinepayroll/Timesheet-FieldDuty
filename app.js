@@ -103,22 +103,75 @@ function escapeHtml(str) {
 }
 
 // ---- Period Sheet rendering ----
-// Builds the Start Shift / End Shift <select> for a day (employeeControls
-// only) — options come from that date's actual raw Log In/Log Out
-// timestamps (r.day_ins/r.day_outs), so the employee can only ever pick a
-// real logged event, never type an arbitrary time. Pre-selects whichever
-// timestamp is currently in effect (r.time_in_raw/r.time_out_raw — the
-// employee's saved override if one exists, otherwise the day's auto-
-// default first-in/last-out).
-function renderShiftSelect(r, which) {
-  var options = which === 'start' ? (r.day_ins || []) : (r.day_outs || []);
-  var current = which === 'start' ? r.time_in_raw : r.time_out_raw;
-  var cls     = which === 'start' ? 'shift-start-select' : 'shift-end-select';
-  var opts = '<option value="">-</option>' + options.map(function(o) {
-    var sel = (o.timestamp === current) ? ' selected' : '';
-    return '<option value="' + escapeHtml(o.timestamp) + '"' + sel + '>' + escapeHtml(o.label) + '</option>';
+// Per-row SHIFT tag <select> (employeeControls only) — the employee tags an
+// individual raw log as the Start or End of a shift; resolveShiftDays()
+// (Code.gs, server-side) pairs a tagged Start with the next tagged End that
+// follows it chronologically into a "resolved Day."
+function renderShiftTagSelect(row) {
+  var opts = ['', 'start', 'end'].map(function(v) {
+    var label = v === '' ? '-' : (v === 'start' ? 'Start' : 'End');
+    var sel = (row.tag === v) ? ' selected' : '';
+    return '<option value="' + v + '"' + sel + '>' + label + '</option>';
   }).join('');
-  return '<select class="' + cls + '" data-date="' + escapeHtml(r.date) + '">' + opts + '</select>';
+  return '<select class="shift-tag-select" data-timestamp="' + escapeHtml(row.timestamp) + '">' + opts + '</select>';
+}
+
+// Pre-pass over the flat per-log timeline (employeeControls only): computes,
+// per row index, whether it starts/continues a resolved-Day range (drives
+// DAY/HRS/MEAL/ACCOM/MIDNIGHT/TOTAL/ACCOM CLAIM rowspans) and whether it
+// starts/continues a per-location segment range (drives FROM/TO/MODE/FARE
+// AMT/FARE CLAIM rowspans, matched back from each date's existing
+// segments[] by exact timestamp). These are two INDEPENDENT rowspan systems
+// layered over the same row list — a segment's 2 rows can straddle a
+// Day-range boundary, or exist with no Day-range at all; neither system
+// needs to know the other's span.
+function buildLogRowSpans(logs, daysByNumber, rowsByDate) {
+  var n = logs.length;
+  var spans = [];
+  for (var i = 0; i < n; i++) {
+    spans.push({
+      dayGroupStart: false, daySpanLength: 0, day: null, dayContinuation: false,
+      segGroupStart: false, segSpanLength: 0, seg: null, segDate: null, segContinuation: false
+    });
+  }
+
+  // Day-range runs: contiguous rows sharing the same non-null day_number —
+  // safe to detect by equality alone since resolveShiftDays (Code.gs) never
+  // produces overlapping Days (a new Start always closes or abandons the
+  // previous pending one first).
+  var i = 0;
+  while (i < n) {
+    var dn = logs[i].day_number;
+    if (!dn) { i++; continue; }
+    var j = i;
+    while (j < n && logs[j].day_number === dn) j++;
+    spans[i].dayGroupStart = true;
+    spans[i].daySpanLength = j - i;
+    spans[i].day = daysByNumber[dn];
+    for (var k = i + 1; k < j; k++) spans[k].dayContinuation = true;
+    i = j;
+  }
+
+  var indexByTimestamp = {};
+  logs.forEach(function(row, idx) { indexByTimestamp[row.timestamp] = idx; });
+
+  Object.keys(rowsByDate).forEach(function(date) {
+    var segments = rowsByDate[date].segments || [];
+    segments.forEach(function(seg) {
+      var inIdx  = seg.time_in_raw  ? indexByTimestamp[seg.time_in_raw]  : undefined;
+      var outIdx = seg.time_out_raw ? indexByTimestamp[seg.time_out_raw] : undefined;
+      if (inIdx === undefined && outIdx === undefined) return;
+      var lo = (inIdx !== undefined && outIdx !== undefined) ? Math.min(inIdx, outIdx) : (inIdx !== undefined ? inIdx : outIdx);
+      var hi = (inIdx !== undefined && outIdx !== undefined) ? Math.max(inIdx, outIdx) : lo;
+      spans[lo].segGroupStart = true;
+      spans[lo].segSpanLength = hi - lo + 1;
+      spans[lo].seg = seg;
+      spans[lo].segDate = date;
+      for (var k = lo + 1; k <= hi; k++) spans[k].segContinuation = true;
+    });
+  });
+
+  return spans;
 }
 
 // Pure sheet -> HTML string function, shared by index.html (employee
@@ -129,26 +182,16 @@ function renderPeriodSheet(sheet, opts) {
   var adminControls    = !!opts.adminControls;
   var employeeControls = !!opts.employeeControls;
   var e = sheet.employee;
-  // Days-worked/total-hours summary + DAY-column numbering — employee view
-  // only, purely derived from the day-level hours_worked field (already
-  // zeroed by the backend whenever a day's effective first-in/last-out
-  // pairing is incomplete, whether auto-derived or employee-overridden), so
-  // this stays on the same day-level footing as the rest of the sheet's
-  // day-level columns. dayNumbers only gets an entry for a RESOLVED date
-  // (hours_worked > 0) — an unresolved date in between simply has no entry,
-  // so the next resolved date continues the count rather than reserving a
-  // number for it.
-  var daysWorked = 0, totalHours = 0, dayNumbers = {};
+  // Days-worked/total-hours summary — employee view only, derived from
+  // sheet.days (one entry per RESOLVED Start/End tag pair — see
+  // resolveShiftDays in Code.gs). Every entry in sheet.days already
+  // represents a complete, resolved shift, so daysWorked is simply its
+  // length — no filtering needed (unlike the old date-bucketed scheme,
+  // there's no "date with 0 hours" case to exclude here).
+  var daysWorked = 0, totalHours = 0;
   if (employeeControls) {
-    var dayCounter = 0;
-    sheet.rows.forEach(function(r) {
-      totalHours += (r.hours_worked || 0);
-      if (r.hours_worked > 0) {
-        daysWorked++;
-        dayCounter++;
-        dayNumbers[r.date] = dayCounter;
-      }
-    });
+    daysWorked = (sheet.days || []).length;
+    (sheet.days || []).forEach(function(d) { totalHours += (d.hours_worked || 0); });
   }
   var html = '<div id="printable-sheet">';
   html += '<div style="display:flex;justify-content:space-between;margin-bottom:12px;">';
@@ -162,7 +205,7 @@ function renderPeriodSheet(sheet, opts) {
   html += '<div class="table-scroll"><table>';
   if (employeeControls) {
     html += '<thead><tr>' +
-      '<th>DAY</th><th>DATE</th><th>BRANCH</th><th>START SHIFT</th><th>END SHIFT</th><th>HRS</th>' +
+      '<th>DATE</th><th>DAY</th><th>SHIFT</th><th>TIME</th><th>BRANCH</th><th>HRS</th>' +
       '<th>FROM</th><th>TO</th><th>MODE</th><th>FARE AMT</th>' +
       '<th>MEAL</th><th>ACCOM</th><th>MIDNIGHT</th><th>TOTAL</th>' +
       '<th>FARE CLAIM</th><th>ACCOM CLAIM</th>' +
@@ -175,125 +218,155 @@ function renderPeriodSheet(sheet, opts) {
       (adminControls ? '<th>MEAL CTRL</th>' : '') +
       '</tr></thead><tbody>';
   }
-  sheet.rows.forEach(function(r) {
-    var claimDetails = r.claim_details || [];
-    // Itemized log-in/out segments — one <tr> per segment. A day with a
-    // single complete in/out pair has exactly one segment, so this
-    // reproduces today's one-row-per-day output unchanged (rowspan=1 is a
-    // no-op); only genuinely multi-segment ("roving") days visibly differ.
-    var segments = (r.segments && r.segments.length) ? r.segments : [null];
-    var accumClaim = null; // accommodation stays day-level — a hotel stay isn't per-segment
-    claimDetails.forEach(function(c) {
-      if (c.type === 'accommodation' && !accumClaim) accumClaim = c;
-    });
+  if (employeeControls) {
+    // Flat, whole-period, chronological per-log timeline — one <tr> per raw
+    // attendance log (sheet.logs), not per calendar date. DAY/HRS/MEAL/
+    // ACCOM/MIDNIGHT/TOTAL/ACCOM CLAIM rowspan across a resolved Day's row
+    // range (sheet.days — see resolveShiftDays in Code.gs); FROM/TO/MODE/
+    // FARE AMT/FARE CLAIM rowspan across a per-location segment's own 2
+    // rows, independently of any Day range (a segment can straddle a Day
+    // boundary or have no Day at all — see buildLogRowSpans above).
+    var daysByNumber = {};
+    (sheet.days || []).forEach(function(d) { daysByNumber[d.dayNumber] = d; });
+    var rowsByDate = {};
+    sheet.rows.forEach(function(r) { rowsByDate[r.date] = r; });
+    var logs = sheet.logs || [];
+    var spans = buildLogRowSpans(logs, daysByNumber, rowsByDate);
 
-    segments.forEach(function(seg, si) {
+    logs.forEach(function(row, i) {
+      var sp = spans[i];
       html += '<tr>';
-      if (si === 0) {
-        if (employeeControls) {
-          html += '<td rowspan="' + segments.length + '">' + (dayNumbers[r.date] || '') + '</td>';
-        }
-        html += '<td rowspan="' + segments.length + '">' + escapeHtml(r.date) + '</td>';
-        html += '<td rowspan="' + segments.length + '">' + escapeHtml(r.branch) + '</td>';
-      }
-      if (employeeControls) {
-        // Start/End Shift are day-level (the employee's selection applies
-        // to the whole day, not per-segment) — shown once, spanning every
-        // segment row of that day, same as DATE/BRANCH above.
-        if (si === 0) {
-          html += '<td rowspan="' + segments.length + '">' + renderShiftSelect(r, 'start') + '</td>';
-          html += '<td rowspan="' + segments.length + '">' + renderShiftSelect(r, 'end')   + '</td>';
-        }
-      } else {
-        html += '<td>' + escapeHtml(seg ? seg.time_in  : r.time_in)  + '</td>';
-        html += '<td>' + escapeHtml(seg ? seg.time_out : r.time_out) + '</td>';
-      }
-      if (si === 0) {
-        html += '<td rowspan="' + segments.length + '">' + r.hours_worked + '</td>';
+      html += '<td>' + escapeHtml(row.date) + '</td>';
+
+      if (sp.dayGroupStart) {
+        html += '<td rowspan="' + sp.daySpanLength + '">' + sp.day.dayNumber + '</td>';
+      } else if (!sp.dayContinuation) {
+        html += '<td></td>';
       }
 
-      if (employeeControls) {
+      html += '<td>' + renderShiftTagSelect(row) + '</td>';
+      html += '<td>' + escapeHtml(row.time_label) + '</td>';
+      html += '<td>' + escapeHtml(row.destination || '') + '</td>';
+
+      if (sp.dayGroupStart) {
+        html += '<td rowspan="' + sp.daySpanLength + '">' + sp.day.hours_worked + '</td>';
+      } else if (!sp.dayContinuation) {
+        html += '<td></td>';
+      }
+
+      // FROM/TO/MODE/FARE AMT/FARE CLAIM — per-segment, independent of Day range
+      if (sp.segGroupStart) {
+        var dateRow = rowsByDate[sp.segDate];
+        var claimDetails = (dateRow && dateRow.claim_details) || [];
         // Per-segment fare claim: match by segment_key. A legacy (pre-
         // feature) claim with a blank segment_key has no segment to
-        // attach to — attribute it to segment index 0 as a fallback (no
-        // such claim should exist for a genuinely multi-segment day, since
-        // per-segment claiming didn't exist before this feature).
-        var segClaim = seg ? claimDetails.filter(function(c) {
-          return c.type === 'special-fare' && c.segment_key === seg.seg_key;
-        })[0] : null;
-        if (!segClaim && si === 0) {
+        // attach to — same fallback as before this rewrite.
+        var segClaim = claimDetails.filter(function(c) {
+          return c.type === 'special-fare' && c.segment_key === sp.seg.seg_key;
+        })[0];
+        if (!segClaim) {
           segClaim = claimDetails.filter(function(c) {
             return c.type === 'special-fare' && !c.segment_key;
           })[0] || null;
         }
         html +=
-          '<td>' + escapeHtml(segClaim ? segClaim.from_loc     : '') + '</td>' +
-          '<td>' + escapeHtml(segClaim ? segClaim.to_loc       : '') + '</td>' +
-          '<td>' + escapeHtml(segClaim ? segClaim.vehicle_mode : '') + '</td>' +
-          '<td>' + formatCurrency(segClaim ? segClaim.claimed_amount : 0) + '</td>';
+          '<td rowspan="' + sp.segSpanLength + '">' + escapeHtml(segClaim ? segClaim.from_loc     : '') + '</td>' +
+          '<td rowspan="' + sp.segSpanLength + '">' + escapeHtml(segClaim ? segClaim.to_loc       : '') + '</td>' +
+          '<td rowspan="' + sp.segSpanLength + '">' + escapeHtml(segClaim ? segClaim.vehicle_mode : '') + '</td>' +
+          '<td rowspan="' + sp.segSpanLength + '">' + formatCurrency(segClaim ? segClaim.claimed_amount : 0) + '</td>';
+        if (!segClaim) {
+          html += '<td rowspan="' + sp.segSpanLength + '"><button class="emp-claim-btn" data-date="' + escapeHtml(sp.segDate) + '" data-seg="' + escapeHtml(sp.seg.seg_key) + '" data-type="special-fare">+ Fare</button></td>';
+        } else {
+          var fareLabel = segClaim.status === 'Approved' ? '✓ Approved' : '⏳ Pending';
+          html += '<td rowspan="' + sp.segSpanLength + '"><span class="claim-status-badge claim-status-' + escapeHtml(segClaim.status.toLowerCase()) + '">' + fareLabel + '</span></td>';
+        }
+      } else if (!sp.segContinuation) {
+        html += '<td></td><td></td><td></td><td></td><td></td>';
+      }
+
+      // MEAL/ACCOM/MIDNIGHT/TOTAL/ACCOM CLAIM — day-range level
+      if (sp.dayGroupStart) {
+        html +=
+          '<td rowspan="' + sp.daySpanLength + '">' + formatCurrency(sp.day.meal) + '</td>' +
+          '<td rowspan="' + sp.daySpanLength + '">' + formatCurrency(sp.day.accom) + '</td>' +
+          '<td rowspan="' + sp.daySpanLength + '">' + formatCurrency(sp.day.midnight) + '</td>' +
+          '<td rowspan="' + sp.daySpanLength + '"><b>' + formatCurrency(sp.day.total) + '</b></td>';
+        var ownDateRow = rowsByDate[sp.day.ownDate];
+        var ownClaimDetails = (ownDateRow && ownDateRow.claim_details) || [];
+        var accumClaim = ownClaimDetails.filter(function(c) { return c.type === 'accommodation'; })[0] || null;
+        if (!accumClaim) {
+          html += '<td rowspan="' + sp.daySpanLength + '"><button class="emp-claim-btn" data-date="' + escapeHtml(sp.day.ownDate) + '" data-type="accommodation">+ Accom</button></td>';
+        } else {
+          var accumLabel = accumClaim.status === 'Approved' ? '✓ Approved' : '⏳ Pending';
+          html += '<td rowspan="' + sp.daySpanLength + '"><span class="claim-status-badge claim-status-' + escapeHtml(accumClaim.status.toLowerCase()) + '">' + accumLabel + '</span></td>';
+        }
+      } else if (!sp.dayContinuation) {
+        html += '<td></td><td></td><td></td><td></td><td></td>';
+      }
+
+      html += '</tr>';
+    });
+  } else {
+    sheet.rows.forEach(function(r) {
+      // Itemized log-in/out segments — one <tr> per segment. A day with a
+      // single complete in/out pair has exactly one segment, so this
+      // reproduces today's one-row-per-day output unchanged (rowspan=1 is a
+      // no-op); only genuinely multi-segment ("roving") days visibly differ.
+      var segments = (r.segments && r.segments.length) ? r.segments : [null];
+
+      segments.forEach(function(seg, si) {
+        html += '<tr>';
+        if (si === 0) {
+          html += '<td rowspan="' + segments.length + '">' + escapeHtml(r.date) + '</td>';
+          html += '<td rowspan="' + segments.length + '">' + escapeHtml(r.branch) + '</td>';
+        }
+        html += '<td>' + escapeHtml(seg ? seg.time_in  : r.time_in)  + '</td>';
+        html += '<td>' + escapeHtml(seg ? seg.time_out : r.time_out) + '</td>';
+        if (si === 0) {
+          html += '<td rowspan="' + segments.length + '">' + r.hours_worked + '</td>';
+        }
+
         if (si === 0) {
           html +=
+            '<td rowspan="' + segments.length + '">' + formatCurrency(r.auto_fare) + '</td>' +
+            '<td rowspan="' + segments.length + '">' + formatCurrency(r.special_fare) + '</td>' +
+            '<td rowspan="' + segments.length + '"><b>' + formatCurrency(r.total_fare) + '</b></td>' +
             '<td rowspan="' + segments.length + '">' + formatCurrency(r.meal) + '</td>' +
             '<td rowspan="' + segments.length + '">' + formatCurrency(r.accom) + '</td>' +
             '<td rowspan="' + segments.length + '">' + formatCurrency(r.midnight) + '</td>' +
             '<td rowspan="' + segments.length + '"><b>' + formatCurrency(r.total_allowance) + '</b></td>';
-        }
-        // FARE CLAIM column: + Fare button (one per segment) or status badge
-        if (!segClaim) {
-          html += '<td><button class="emp-claim-btn" data-date="' + escapeHtml(r.date) + '" data-seg="' + escapeHtml(seg ? seg.seg_key : '') + '" data-type="special-fare">+ Fare</button></td>';
-        } else {
-          var fareLabel = segClaim.status === 'Approved' ? '✓ Approved' : '⏳ Pending';
-          html += '<td><span class="claim-status-badge claim-status-' + escapeHtml(segClaim.status.toLowerCase()) + '">' + fareLabel + '</span></td>';
-        }
-        // ACCOM CLAIM column: + Accom button or status badge — day-level, one per day
-        if (si === 0) {
-          if (!accumClaim) {
-            html += '<td rowspan="' + segments.length + '"><button class="emp-claim-btn" data-date="' + escapeHtml(r.date) + '" data-type="accommodation">+ Accom</button></td>';
-          } else {
-            var accumLabel = accumClaim.status === 'Approved' ? '✓ Approved' : '⏳ Pending';
-            html += '<td rowspan="' + segments.length + '"><span class="claim-status-badge claim-status-' + escapeHtml(accumClaim.status.toLowerCase()) + '">' + accumLabel + '</span></td>';
+          if (adminControls) {
+            // Button must remain visible on a denied row (meal forced to 0 by
+            // the server) so the admin can reverse the denial — checking only
+            // `r.meal > 0` would make the button disappear the moment a row
+            // is denied. r.date is a plain 'YYYY-MM-DD' string (never
+            // employee-authored free text), but it's escaped anyway for the
+            // attribute value per this file's existing convention. Meal
+            // control stays one-per-day (rowspan) even on a multi-segment
+            // day — meal is a day-level allowance, not per-segment.
+            if (r.meal > 0 || r.meal_denied) {
+              // Button label is the ACTION ("Allow Meal" reverses a denial), not
+              // the current status — easy to misread as "meal is allowed" when
+              // a row is actually denied. The colored status word in front of it
+              // (and the button's own background color) is the actual state
+              // indicator; the button text alone should never be relied on.
+              html += '<td rowspan="' + segments.length + '">' +
+                '<span data-status-for="' + escapeHtml(r.date) + '" style="font-weight:bold;color:' + (r.meal_denied ? '#b00020' : '#0a7d2c') + ';margin-right:6px;">' +
+                  (r.meal_denied ? 'DENIED' : 'ALLOWED') +
+                '</span>' +
+                '<button class="meal-deny-btn" data-date="' + escapeHtml(r.date) + '" data-denied="' + !!r.meal_denied + '" ' +
+                  'style="background:' + (r.meal_denied ? '#b00020' : '#1a1a2e') + ';">' +
+                  (r.meal_denied ? 'Allow Meal' : 'Deny Meal') +
+                '</button></td>';
+            } else {
+              html += '<td rowspan="' + segments.length + '"></td>';
+            }
           }
         }
-      } else if (si === 0) {
-        html +=
-          '<td rowspan="' + segments.length + '">' + formatCurrency(r.auto_fare) + '</td>' +
-          '<td rowspan="' + segments.length + '">' + formatCurrency(r.special_fare) + '</td>' +
-          '<td rowspan="' + segments.length + '"><b>' + formatCurrency(r.total_fare) + '</b></td>' +
-          '<td rowspan="' + segments.length + '">' + formatCurrency(r.meal) + '</td>' +
-          '<td rowspan="' + segments.length + '">' + formatCurrency(r.accom) + '</td>' +
-          '<td rowspan="' + segments.length + '">' + formatCurrency(r.midnight) + '</td>' +
-          '<td rowspan="' + segments.length + '"><b>' + formatCurrency(r.total_allowance) + '</b></td>';
-        if (adminControls) {
-          // Button must remain visible on a denied row (meal forced to 0 by
-          // the server) so the admin can reverse the denial — checking only
-          // `r.meal > 0` would make the button disappear the moment a row
-          // is denied. r.date is a plain 'YYYY-MM-DD' string (never
-          // employee-authored free text), but it's escaped anyway for the
-          // attribute value per this file's existing convention. Meal
-          // control stays one-per-day (rowspan) even on a multi-segment
-          // day — meal is a day-level allowance, not per-segment.
-          if (r.meal > 0 || r.meal_denied) {
-            // Button label is the ACTION ("Allow Meal" reverses a denial), not
-            // the current status — easy to misread as "meal is allowed" when
-            // a row is actually denied. The colored status word in front of it
-            // (and the button's own background color) is the actual state
-            // indicator; the button text alone should never be relied on.
-            html += '<td rowspan="' + segments.length + '">' +
-              '<span data-status-for="' + escapeHtml(r.date) + '" style="font-weight:bold;color:' + (r.meal_denied ? '#b00020' : '#0a7d2c') + ';margin-right:6px;">' +
-                (r.meal_denied ? 'DENIED' : 'ALLOWED') +
-              '</span>' +
-              '<button class="meal-deny-btn" data-date="' + escapeHtml(r.date) + '" data-denied="' + !!r.meal_denied + '" ' +
-                'style="background:' + (r.meal_denied ? '#b00020' : '#1a1a2e') + ';">' +
-                (r.meal_denied ? 'Allow Meal' : 'Deny Meal') +
-              '</button></td>';
-          } else {
-            html += '<td rowspan="' + segments.length + '"></td>';
-          }
-        }
-      }
-      html += '</tr>';
+        html += '</tr>';
+      });
     });
-  });
+  }
   // Totals row
   var t = sheet.totals;
   if (employeeControls) {

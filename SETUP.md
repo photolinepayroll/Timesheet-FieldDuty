@@ -127,38 +127,41 @@ Leave the rest of the rows empty for now (rows are added/removed only
 via the admin's "Deny Meal"/"Allow Meal" button in the Period Sheet
 view).
 
-### Tab: `ShiftSelections`
+### Tab: `ShiftTags`
 
 Row 1 headers:
 ```
-employee_name | date | start_timestamp | end_timestamp | updated_at
+employee_name | timestamp | role | updated_at
 ```
-Employee override for which raw attendance log is their real Start
-Shift and End Shift for a given date, since the automatic first-Log-In/
-last-Log-Out pairing (and especially the per-segment itemization) can be
-wrong when a day has stray/orphan logs. One row = one employee's chosen
-pair for one date; presence of a row overrides that day's computed
-`time_in`/`time_out` (and therefore `hours_worked`/`meal`/`accom`/
-`midnight`/the DAY count) — absence means the auto-default (first Log
-In, last Log Out) stands. Rows are only ever added/updated by the app
-itself (the `saveShiftSelection` action) — never hand-edited.
+Lets an employee tag an individual raw attendance log as the `'start'`
+or `'end'` of a shift, since the automatic Log-In/Log-Out pairing (and
+especially the per-segment itemization) can silently pair the wrong
+events together when a day has stray/orphan logs. The backend's
+`resolveShiftDays()` (`Code.gs`, inside `handleGetPeriodSheet`) pairs a
+tagged `'start'` with the next tagged `'end'` that follows it
+chronologically into a "resolved Day," which drives that shift's
+`hours_worked`/`meal`/`accom`/`midnight`/the DAY count — this can span
+two calendar dates (e.g. an overnight shift). One row = one tagged log.
+Rows are only ever added/removed by the app itself (the `saveShiftTag`
+action) — never hand-edited. Untagging a row (role `''`) **deletes**
+the row entirely rather than writing a blank role, so there is no
+"tagged but blank" state to special-case on read.
 - `employee_name` must exactly match `Users.name` (case-sensitive —
   same reasoning as `MealDenials` above: written by the app from the
   already-resolved employee name, never hand-typed).
-- `date` is `'YYYY-MM-DD'`. Sheets will auto-convert it to a real Date
-  cell on write — always read it back through `claimDateKey()`, never
-  compare the raw cell value to a string.
-- `start_timestamp`/`end_timestamp` are the FULL raw attendance
-  timestamp string (e.g. `"2026-06-30 08:58:12"`), not just a
-  time-of-day — this is the exact value needed to re-locate the chosen
-  log record on every subsequent read. Also subject to the same Sheets
-  Date-cell auto-conversion as `date` above — always read back through
-  `normalizeTimestampCell()`, which preserves time-of-day (unlike
-  `claimDateKey()`, which deliberately truncates to just the date).
+- `timestamp` is the FULL raw attendance timestamp string (e.g.
+  `"2026-06-30 08:58:12"`), not just a date or a time-of-day — this is
+  the unit being tagged (one specific raw log), not a calendar day, and
+  is the exact join key used to re-locate that log record on every
+  subsequent read. Subject to the same Sheets Date-cell auto-conversion
+  as other timestamp-shaped cells in this app — always read back
+  through `normalizeTimestampCell()`, which preserves time-of-day
+  (unlike `claimDateKey()`, which deliberately truncates to just the
+  date).
+- `role` is `'start'` or `'end'`.
 
-Leave the rest of the rows empty for now — rows are added/updated only
-via the employee's Start Shift/End Shift dropdowns in the Period Sheet
-view.
+Leave the rest of the rows empty for now — rows are added/removed only
+via the employee's per-row SHIFT dropdown in the Period Sheet view.
 
 ### Tab: `RawRateImport` (scratch tab)
 
