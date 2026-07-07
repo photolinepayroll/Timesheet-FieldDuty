@@ -142,8 +142,9 @@ tagged `'start'` with the next tagged `'end'` that follows it
 chronologically into a "resolved Day," which drives that shift's
 `hours_worked`/`meal`/`accom`/`midnight`/the DAY count — this can span
 two calendar dates (e.g. an overnight shift). One row = one tagged log.
-Rows are only ever added/removed by the app itself (the `saveShiftTag`
-action) — never hand-edited. Untagging a row (role `''`) **deletes**
+Rows are only ever added/removed by the app itself (the `saveShiftTags`
+action, batched — one request can add/update/remove several tags at
+once) — never hand-edited. Untagging a row (role `''`) **deletes**
 the row entirely rather than writing a blank role, so there is no
 "tagged but blank" state to special-case on read.
 - `employee_name` must exactly match `Users.name` (case-sensitive —

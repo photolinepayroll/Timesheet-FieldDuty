@@ -147,8 +147,9 @@
       });
 
       // Event delegation for the per-row SHIFT tag dropdown. Clicks only
-      // flip state in the browser — the actual saveShiftTag writes are
-      // batched up and sent when the employee clicks "Save Shift Changes",
+      // flip state in the browser — the actual saveShiftTags write is
+      // batched up and sent as ONE request when the employee clicks "Save
+      // Shift Changes",
       // since round-tripping (and the subsequent full period-sheet
       // re-fetch) on every single dropdown change was too slow/jarring
       // when tagging several rows in a row. Same pattern as admin.html's
@@ -181,28 +182,22 @@
       var user = currentUser();
       var btn = document.getElementById('save-shift-btn');
       btn.disabled = true;
-      var remaining = timestamps.length;
-      var errors = [];
-      timestamps.forEach(function(ts) {
-        api('saveShiftTag', {
-          employee_name: user.name,
-          timestamp:     ts,
-          role:          window._pendingShiftTags[ts]
-        }, function(err) {
-          if (err) errors.push(ts + ': ' + err.message);
-          remaining--;
-          if (remaining === 0) {
-            btn.disabled = false;
-            window._pendingShiftTags = {};
-            if (errors.length) alert('Some shift changes failed to save:\n' + errors.join('\n'));
-            // Reload once so HRS/MEAL/ACCOM/MIDNIGHT/DAY# all recompute
-            // server-side from the newly-tagged pairs.
-            var cfg = window._plConfig || {};
-            loadEmployeePeriodSheet(user, {
-              period_start: cfg.period_start || document.getElementById('inp-period-start').value,
-              period_end:   cfg.period_end   || document.getElementById('inp-period-end').value
-            });
-          }
+      // One request for every pending tag — saveShiftTags (plural) applies
+      // them all in a single Apps Script execution, instead of one HTTP
+      // round trip per changed row.
+      var tags = timestamps.map(function(ts) {
+        return { timestamp: ts, role: window._pendingShiftTags[ts] };
+      });
+      api('saveShiftTags', { employee_name: user.name, tags: tags }, function(err) {
+        btn.disabled = false;
+        if (err) { alert(err.message); return; }
+        window._pendingShiftTags = {};
+        // Reload once so HRS/MEAL/ACCOM/MIDNIGHT/DAY# all recompute
+        // server-side from the newly-tagged pairs.
+        var cfg = window._plConfig || {};
+        loadEmployeePeriodSheet(user, {
+          period_start: cfg.period_start || document.getElementById('inp-period-start').value,
+          period_end:   cfg.period_end   || document.getElementById('inp-period-end').value
         });
       });
     }

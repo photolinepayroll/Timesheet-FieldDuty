@@ -109,7 +109,7 @@ var HANDLERS = {
   'approveClaim':     { fn: handleApproveClaim,    get: false },
   'getPeriodSheet':   { fn: handleGetPeriodSheet,  get: true  },
   'toggleMealDenial': { fn: handleToggleMealDenial, get: false },
-  'saveShiftTag':     { fn: handleSaveShiftTag,        get: false },
+  'saveShiftTags':    { fn: handleSaveShiftTags,       get: false },
   'checkNameMatches': { fn: handleCheckNameMatches, get: true  }
 };
 
@@ -914,8 +914,13 @@ function handleToggleMealDenial(payload) {
 // session name, never hand-typed. Untagging (role '') DELETES the row
 // entirely rather than writing a blank role, so there's no "tagged but
 // blank" state to special-case on read.
-function handleSaveShiftTag(payload) {
-  // payload: { employee_name, timestamp, role }  // role: 'start'|'end'|''
+//
+// Batched (plural) rather than one action per tag — the frontend's "Save
+// Shift Changes" button already batches multiple dropdown edits together
+// in the browser (see index.html), so sending them as one request here
+// avoids one Apps Script invocation + HTTP round trip per changed row.
+function handleSaveShiftTags(payload) {
+  // payload: { employee_name, tags: [{ timestamp, role }, ...] }  // role: 'start'|'end'|''
   var sh = getSheet('ShiftTags');
   var rows = sh.getDataRange().getValues();
   var headers = rows[0];
@@ -923,24 +928,45 @@ function handleSaveShiftTag(payload) {
   var tsIdx   = headers.indexOf('timestamp');
   var roleIdx = headers.indexOf('role');
   var updIdx  = headers.indexOf('updated_at');
-  var ts      = normalizeTimestampCell(payload.timestamp);
   var now     = new Date().toISOString();
 
+  // Index this employee's existing rows by normalized timestamp once,
+  // rather than re-scanning the whole sheet per tag.
+  var existingRowIndex = {}; // normalizedTimestamp -> 0-based index into `rows`
   for (var i = 1; i < rows.length; i++) {
-    if (rows[i][nameIdx] === payload.employee_name &&
-        normalizeTimestampCell(rows[i][tsIdx]) === ts) {
-      if (!payload.role) {
-        sh.deleteRow(i + 1);
-        return { saved: true, role: '' };
-      }
-      sh.getRange(i + 1, roleIdx + 1).setValue(payload.role);
-      sh.getRange(i + 1, updIdx  + 1).setValue(now);
-      return { saved: true, role: payload.role };
+    if (rows[i][nameIdx] === payload.employee_name) {
+      existingRowIndex[normalizeTimestampCell(rows[i][tsIdx])] = i;
     }
   }
-  if (!payload.role) return { saved: true, role: '' }; // untagging a never-tagged row: no-op
-  sh.appendRow([payload.employee_name, ts, payload.role, now]);
-  return { saved: true, role: payload.role };
+
+  var sheetRowsToDelete = []; // 1-based sheet row numbers
+  var toAppend = [];
+
+  payload.tags.forEach(function(tag) {
+    var ts = normalizeTimestampCell(tag.timestamp);
+    var existingIdx = existingRowIndex[ts];
+    if (!tag.role) {
+      if (existingIdx !== undefined) sheetRowsToDelete.push(existingIdx + 1);
+      return;
+    }
+    if (existingIdx !== undefined) {
+      sh.getRange(existingIdx + 1, roleIdx + 1).setValue(tag.role);
+      sh.getRange(existingIdx + 1, updIdx  + 1).setValue(now);
+    } else {
+      toAppend.push([payload.employee_name, ts, tag.role, now]);
+    }
+  });
+
+  // Delete in descending row-number order so an earlier deletion never
+  // shifts a still-pending later row number out from under it.
+  sheetRowsToDelete.sort(function(a, b) { return b - a; });
+  sheetRowsToDelete.forEach(function(rowNum) { sh.deleteRow(rowNum); });
+
+  if (toAppend.length) {
+    sh.getRange(sh.getLastRow() + 1, 1, toAppend.length, headers.length).setValues(toAppend);
+  }
+
+  return { saved: true, count: payload.tags.length };
 }
 
 // ============================================================
