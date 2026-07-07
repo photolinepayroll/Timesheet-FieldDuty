@@ -113,7 +113,11 @@ function renderShiftTagSelect(row) {
     var sel = (row.tag === v) ? ' selected' : '';
     return '<option value="' + v + '"' + sel + '>' + label + '</option>';
   }).join('');
-  return '<select class="shift-tag-select" data-timestamp="' + escapeHtml(row.timestamp) + '">' + opts + '</select>';
+  // data-original lets the change handler tell "genuinely changed from what
+  // the server last returned" apart from "toggled back to where it
+  // started" — the latter should NOT count as a pending change (same
+  // reasoning as admin.html's meal-deny batching).
+  return '<select class="shift-tag-select" data-timestamp="' + escapeHtml(row.timestamp) + '" data-original="' + escapeHtml(row.tag) + '">' + opts + '</select>';
 }
 
 // Pre-pass over the flat per-log timeline (employeeControls only): computes,

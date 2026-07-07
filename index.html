@@ -56,6 +56,7 @@
 
     <!-- Tab 1: Timesheet -->
     <div id="tab-sheet">
+      <button id="save-shift-btn" onclick="saveShiftChanges()" style="padding:8px 18px;display:none;margin-bottom:10px;">💾 Save Shift Changes</button>
       <div id="emp-period-sheet"><p style="color:#888;">Select a date range above and click Load.</p></div>
 
       <!-- Inline claim form — revealed when employee clicks + Fare / + Accom -->
@@ -145,33 +146,63 @@
         openClaimForm(btn.dataset.date, btn.dataset.type, btn.dataset.seg);
       });
 
-      // Event delegation for the per-row SHIFT tag dropdown — each row is
-      // tagged independently (blank/Start/End); the backend's
-      // resolveShiftDays (Code.gs) pairs a tagged Start with the next
-      // tagged End that follows it chronologically.
+      // Event delegation for the per-row SHIFT tag dropdown. Clicks only
+      // flip state in the browser — the actual saveShiftTag writes are
+      // batched up and sent when the employee clicks "Save Shift Changes",
+      // since round-tripping (and the subsequent full period-sheet
+      // re-fetch) on every single dropdown change was too slow/jarring
+      // when tagging several rows in a row. Same pattern as admin.html's
+      // meal-control batching.
+      window._pendingShiftTags = {};
       document.getElementById('emp-period-sheet').addEventListener('change', function(ev) {
         var sel = ev.target.closest('.shift-tag-select');
         if (!sel) return;
-        saveShiftTag(sel.dataset.timestamp, sel.value);
+        var ts = sel.dataset.timestamp;
+        if (sel.value === sel.dataset.original) {
+          delete window._pendingShiftTags[ts]; // toggled back to original state
+        } else {
+          window._pendingShiftTags[ts] = sel.value;
+        }
+        updateSaveShiftButton();
       });
     });
 
-    // ---- Per-row Start/End Shift tagging ----
-    function saveShiftTag(timestamp, role) {
+    // ---- Per-row Start/End Shift tagging (batched save) ----
+    function updateSaveShiftButton() {
+      var btn = document.getElementById('save-shift-btn');
+      var count = Object.keys(window._pendingShiftTags).length;
+      btn.style.display = count ? 'inline-block' : 'none';
+      btn.textContent = '💾 Save Shift Changes (' + count + ')';
+    }
+
+    function saveShiftChanges() {
+      var timestamps = Object.keys(window._pendingShiftTags);
+      if (!timestamps.length) return;
       var user = currentUser();
-      api('saveShiftTag', {
-        employee_name: user.name,
-        timestamp:     timestamp,
-        role:          role
-      }, function(err) {
-        if (err) { alert(err.message); return; }
-        // Reload so HRS/MEAL/ACCOM/MIDNIGHT/DAY# all recompute server-side
-        // from the newly-tagged pair, same reload-after-save pattern used
-        // after submitting a claim.
-        var cfg = window._plConfig || {};
-        loadEmployeePeriodSheet(user, {
-          period_start: cfg.period_start || document.getElementById('inp-period-start').value,
-          period_end:   cfg.period_end   || document.getElementById('inp-period-end').value
+      var btn = document.getElementById('save-shift-btn');
+      btn.disabled = true;
+      var remaining = timestamps.length;
+      var errors = [];
+      timestamps.forEach(function(ts) {
+        api('saveShiftTag', {
+          employee_name: user.name,
+          timestamp:     ts,
+          role:          window._pendingShiftTags[ts]
+        }, function(err) {
+          if (err) errors.push(ts + ': ' + err.message);
+          remaining--;
+          if (remaining === 0) {
+            btn.disabled = false;
+            window._pendingShiftTags = {};
+            if (errors.length) alert('Some shift changes failed to save:\n' + errors.join('\n'));
+            // Reload once so HRS/MEAL/ACCOM/MIDNIGHT/DAY# all recompute
+            // server-side from the newly-tagged pairs.
+            var cfg = window._plConfig || {};
+            loadEmployeePeriodSheet(user, {
+              period_start: cfg.period_start || document.getElementById('inp-period-start').value,
+              period_end:   cfg.period_end   || document.getElementById('inp-period-end').value
+            });
+          }
         });
       });
     }
@@ -419,6 +450,8 @@
     function loadEmployeePeriodSheet(user, config) {
       var out = document.getElementById('emp-period-sheet');
       out.innerHTML = '<p>Loading your period sheet…</p>';
+      window._pendingShiftTags = {};
+      updateSaveShiftButton();
       api('getPeriodSheet', {
         employee_name: user.name,
         period_start:  config.period_start,
