@@ -66,13 +66,23 @@ function claimDateKey(v) {
 // FULL "YYYY-MM-DD HH:MM:SS"-shaped value where the time-of-day must be
 // preserved (claimDateKey deliberately truncates to just the date, which
 // would collapse every ShiftTags timestamp on a given day to the
-// same key).
+// same key). Must ALWAYS parse through Date and reformat — even for a
+// plain string input — not just when the value already arrives as a Date
+// object. The real attendance app doesn't zero-pad single-digit hours
+// (e.g. "2026-07-01 4:20:11"), so a raw CSV timestamp string compared
+// directly against a Sheets-auto-converted-then-reformatted Date (which
+// DOES come out zero-padded, "2026-07-01 04:20:11") would silently never
+// match — this was a real bug: an End tag on an unpadded-hour timestamp
+// (e.g. 4:20 AM) never resolved into a Day, while a two-digit-hour Start
+// tag (e.g. 6:55 PM) worked fine. Parsing every input through `new Date()`
+// first guarantees both sides of every ShiftTags comparison always produce
+// the identical zero-padded key, regardless of which form the value
+// happened to arrive in.
 function normalizeTimestampCell(v) {
   if (!v) return '';
-  if (v instanceof Date) {
-    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-  }
-  return String(v);
+  var d = (v instanceof Date) ? v : new Date(v);
+  if (isNaN(d.getTime())) return String(v); // defensive fallback — shouldn't happen for real timestamps
+  return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
 }
 
 // Single source of truth for action dispatch, shared by doGet and doPost.
