@@ -199,6 +199,13 @@
       var user = currentUser();
       var btn = document.getElementById('save-shift-btn');
       btn.disabled = true;
+      // Saving + the subsequent reload both take a few seconds (see the
+      // comment above on why a full reload is needed) -- swap in a
+      // "Saving…" label for that whole stretch so it's clear something is
+      // happening, not just an unresponsive button, until the fresh sheet
+      // actually renders.
+      var savingLabel = '⏳ Saving ' + timestamps.length + ' change' + (timestamps.length === 1 ? '' : 's') + '…';
+      btn.textContent = savingLabel;
       // One request for every pending tag — saveShiftTags (plural) applies
       // them all in a single Apps Script execution, instead of one HTTP
       // round trip per changed row.
@@ -206,11 +213,19 @@
         return { timestamp: ts, role: window._pendingShiftTags[ts] };
       });
       api('saveShiftTags', { employee_name: user.name, tags: tags }, function(err) {
-        btn.disabled = false;
-        if (err) { alert(err.message); return; }
+        if (err) {
+          btn.disabled = false;
+          updateSaveShiftButton(); // restore the normal "(N)" label
+          alert(err.message);
+          return;
+        }
         window._pendingShiftTags = {};
         // Reload once so HRS/MEAL/ACCOM/MIDNIGHT/DAY# all recompute
-        // server-side from the newly-tagged pairs.
+        // server-side from the newly-tagged pairs. loadEmployeePeriodSheet
+        // immediately clears/hides this button itself (no pending tags left)
+        // and swaps the sheet area to its own "Loading your period sheet…"
+        // placeholder, so the "Saving…" label above covers exactly the save
+        // round trip, then the reload gets its own separate loading state.
         var cfg = window._plConfig || {};
         loadEmployeePeriodSheet(user, {
           period_start: cfg.period_start || document.getElementById('inp-period-start').value,
