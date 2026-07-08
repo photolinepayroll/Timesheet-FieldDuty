@@ -210,7 +210,7 @@ function renderPeriodSheet(sheet, opts) {
   if (employeeControls) {
     html += '<thead><tr>' +
       '<th>DATE</th><th>DAY</th><th>SHIFT</th><th>TIME</th><th>BRANCH</th><th>HRS</th>' +
-      '<th>FROM</th><th>TO</th><th>MODE</th><th>FARE AMT</th><th>FARE CLAIM</th>' +
+      '<th>FARE AMT</th><th>FARE CLAIM</th>' +
       '<th>MEAL</th><th>ACCOM</th><th>MIDNIGHT</th><th>TOTAL</th><th>ACCOM CLAIM</th>' +
       '</tr></thead><tbody>';
   } else {
@@ -223,18 +223,92 @@ function renderPeriodSheet(sheet, opts) {
   }
   if (employeeControls) {
     // Flat, whole-period, chronological per-log timeline — one <tr> per raw
-    // attendance log (sheet.logs), not per calendar date. DAY/HRS/MEAL/
-    // ACCOM/MIDNIGHT/TOTAL/ACCOM CLAIM rowspan across a resolved Day's row
-    // range (sheet.days — see resolveShiftDays in Code.gs); FROM/TO/MODE/
-    // FARE AMT/FARE CLAIM rowspan across a per-location segment's own 2
-    // rows, independently of any Day range (a segment can straddle a Day
-    // boundary or have no Day at all — see buildLogRowSpans above).
+    // attendance log (sheet.logs), not per calendar date. DAY/HRS/FARE AMT/
+    // FARE CLAIM/MEAL/ACCOM/MIDNIGHT/TOTAL/ACCOM CLAIM all rowspan across a
+    // resolved Day's row range (sheet.days — see resolveShiftDays in
+    // Code.gs), or a single standalone row when a log isn't part of any
+    // resolved Day. Fare used to get its own segment-level rowspan group
+    // (independent of the Day range, with its own FROM/TO/MODE columns) —
+    // stacking one "+ Fare" button per segment made a multi-segment day look
+    // cluttered/confusing, so all of a range's segments now collapse into
+    // one merged FARE AMT/FARE CLAIM cell, with a picker dropdown (see
+    // openFarePicker in index.html) when a range has more than one segment.
     var daysByNumber = {};
     (sheet.days || []).forEach(function(d) { daysByNumber[d.dayNumber] = d; });
     var rowsByDate = {};
     sheet.rows.forEach(function(r) { rowsByDate[r.date] = r; });
     var logs = sheet.logs || [];
     var spans = buildLogRowSpans(logs, daysByNumber, rowsByDate);
+
+    // Collects every distinct segment (see buildLogRowSpans) whose rows fall
+    // within [startIdx, startIdx+length) — a Day range can span segments
+    // from two calendar dates (an overnight shift), so this looks at row
+    // position, not date.
+    function collectRangeSegments(startIdx, length) {
+      var out = [];
+      for (var k = startIdx; k < startIdx + length; k++) {
+        if (spans[k] && spans[k].segGroupStart) {
+          out.push({ seg: spans[k].seg, segDate: spans[k].segDate });
+        }
+      }
+      return out;
+    }
+
+    // Builds the merged FARE AMT + FARE CLAIM <td> pair for a row range.
+    // A range with exactly one segment renders identically to the old
+    // per-segment cell (a single button/status, no picker) — only a
+    // genuinely multi-segment range shows the "Fare (x/y)" picker button.
+    function buildFareCells(startIdx, length, rowspanLen) {
+      var rangeSegs = collectRangeSegments(startIdx, length);
+      var totalAmt = 0;
+      var pickerItems = rangeSegs.map(function(item) {
+        var dateRow = rowsByDate[item.segDate];
+        var claimDetails = (dateRow && dateRow.claim_details) || [];
+        // Per-segment fare claim: match by segment_key. A legacy (pre-
+        // feature) claim with a blank segment_key has no segment to
+        // attach to — same fallback as before this rewrite.
+        var segClaim = claimDetails.filter(function(c) {
+          return c.type === 'special-fare' && c.segment_key === item.seg.seg_key;
+        })[0];
+        if (!segClaim) {
+          segClaim = claimDetails.filter(function(c) {
+            return c.type === 'special-fare' && !c.segment_key;
+          })[0] || null;
+        }
+        if (segClaim) { totalAmt += parseFloat(segClaim.claimed_amount || 0); }
+        var label = (item.seg.time_in || '?') + '–' + (item.seg.time_out || '?') +
+          (item.seg.destination ? (' @ ' + item.seg.destination) : '');
+        return {
+          date: item.segDate,
+          segKey: item.seg.seg_key,
+          label: label,
+          status: segClaim ? segClaim.status : '',
+          amount: segClaim ? segClaim.claimed_amount : null
+        };
+      });
+
+      var amtCell = '<td rowspan="' + rowspanLen + '">' + formatCurrency(totalAmt) + '</td>';
+      var claimCellInner = '';
+      if (pickerItems.length === 1) {
+        var only = pickerItems[0];
+        if (!only.status) {
+          claimCellInner = '<button class="emp-claim-btn" data-date="' + escapeHtml(only.date) + '" data-seg="' + escapeHtml(only.segKey) + '" data-type="special-fare">+ Fare</button>';
+        } else {
+          var soloLabel = only.status === 'Approved' ? '✓ Approved' : '⏳ Pending';
+          claimCellInner = '<span class="claim-status-badge claim-status-' + escapeHtml(only.status.toLowerCase()) + '">' + soloLabel + '</span>';
+        }
+      } else if (pickerItems.length > 1) {
+        var unclaimed = pickerItems.filter(function(p) { return !p.status; }).length;
+        claimCellInner =
+          '<div class="fare-picker">' +
+            '<button type="button" class="fare-picker-btn" data-segs=\'' + escapeHtml(JSON.stringify(pickerItems)) + '\'>' +
+              'Fare (' + (pickerItems.length - unclaimed) + '/' + pickerItems.length + ')' +
+            '</button>' +
+          '</div>';
+      }
+      var claimCell = '<td rowspan="' + rowspanLen + '">' + claimCellInner + '</td>';
+      return amtCell + claimCell;
+    }
 
     logs.forEach(function(row, i) {
       var sp = spans[i];
@@ -257,38 +331,9 @@ function renderPeriodSheet(sheet, opts) {
         html += '<td></td>';
       }
 
-      // FROM/TO/MODE/FARE AMT/FARE CLAIM — per-segment, independent of Day range
-      if (sp.segGroupStart) {
-        var dateRow = rowsByDate[sp.segDate];
-        var claimDetails = (dateRow && dateRow.claim_details) || [];
-        // Per-segment fare claim: match by segment_key. A legacy (pre-
-        // feature) claim with a blank segment_key has no segment to
-        // attach to — same fallback as before this rewrite.
-        var segClaim = claimDetails.filter(function(c) {
-          return c.type === 'special-fare' && c.segment_key === sp.seg.seg_key;
-        })[0];
-        if (!segClaim) {
-          segClaim = claimDetails.filter(function(c) {
-            return c.type === 'special-fare' && !c.segment_key;
-          })[0] || null;
-        }
-        html +=
-          '<td rowspan="' + sp.segSpanLength + '">' + escapeHtml(segClaim ? segClaim.from_loc     : '') + '</td>' +
-          '<td rowspan="' + sp.segSpanLength + '">' + escapeHtml(segClaim ? segClaim.to_loc       : '') + '</td>' +
-          '<td rowspan="' + sp.segSpanLength + '">' + escapeHtml(segClaim ? segClaim.vehicle_mode : '') + '</td>' +
-          '<td rowspan="' + sp.segSpanLength + '">' + formatCurrency(segClaim ? segClaim.claimed_amount : 0) + '</td>';
-        if (!segClaim) {
-          html += '<td rowspan="' + sp.segSpanLength + '"><button class="emp-claim-btn" data-date="' + escapeHtml(sp.segDate) + '" data-seg="' + escapeHtml(sp.seg.seg_key) + '" data-type="special-fare">+ Fare</button></td>';
-        } else {
-          var fareLabel = segClaim.status === 'Approved' ? '✓ Approved' : '⏳ Pending';
-          html += '<td rowspan="' + sp.segSpanLength + '"><span class="claim-status-badge claim-status-' + escapeHtml(segClaim.status.toLowerCase()) + '">' + fareLabel + '</span></td>';
-        }
-      } else if (!sp.segContinuation) {
-        html += '<td></td><td></td><td></td><td></td><td></td>';
-      }
-
-      // MEAL/ACCOM/MIDNIGHT/TOTAL/ACCOM CLAIM — day-range level
+      // FARE AMT/FARE CLAIM/MEAL/ACCOM/MIDNIGHT/TOTAL/ACCOM CLAIM — day-range level
       if (sp.dayGroupStart) {
+        html += buildFareCells(i, sp.daySpanLength, sp.daySpanLength);
         html +=
           '<td rowspan="' + sp.daySpanLength + '">' + formatCurrency(sp.day.meal) + '</td>' +
           '<td rowspan="' + sp.daySpanLength + '">' + formatCurrency(sp.day.accom) + '</td>' +
@@ -304,6 +349,7 @@ function renderPeriodSheet(sheet, opts) {
           html += '<td rowspan="' + sp.daySpanLength + '"><span class="claim-status-badge claim-status-' + escapeHtml(accumClaim.status.toLowerCase()) + '">' + accumLabel + '</span></td>';
         }
       } else if (!sp.dayContinuation) {
+        html += buildFareCells(i, 1, 1);
         html += '<td></td><td></td><td></td><td></td><td></td>';
       }
 
@@ -375,7 +421,6 @@ function renderPeriodSheet(sheet, opts) {
   if (employeeControls) {
     html += '<tr style="font-weight:bold;background:var(--blue2);color:#fff;">' +
       '<td colspan="6">TOTALS</td>' +
-      '<td colspan="3"></td>' +
       '<td>' + formatCurrency(t.total_fare) + '</td>' +
       '<td></td>' +
       '<td>' + formatCurrency(t.meal) + '</td>' +

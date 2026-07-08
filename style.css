@@ -81,6 +81,40 @@ tr:nth-child(even) { background: #f5f5f5; }
 .badge-flagged { background: #e74c3c; color:#fff; border-radius:3px; padding:2px 6px; font-size:11px; }
 .badge-rejected { background: #e74c3c; color:#fff; border-radius:3px; padding:2px 6px; font-size:11px; }
 
+/* ---------- Fare-claim picker (multi-segment days, employee period sheet) ---------- */
+
+.fare-picker { position: relative; display: inline-block; }
+.fare-picker-btn { font-size: .78em; padding: 3px 9px; cursor: pointer; }
+.fare-picker-list {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 240px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--card-bg);
+  border: 1px solid var(--blue3);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(30, 64, 175, 0.15);
+  z-index: 50;
+  text-align: left;
+  white-space: normal;
+}
+.fare-picker-list.open { display: block; }
+.fare-picker-item {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--blue1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: .82em;
+  font-weight: normal;
+}
+.fare-picker-item:last-child { border-bottom: none; }
+
 /* ---------- Employee autocomplete (Approve Claims / Period Sheets) ---------- */
 
 .emp-ac-list {
