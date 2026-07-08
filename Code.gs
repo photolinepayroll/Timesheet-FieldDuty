@@ -726,12 +726,57 @@ function computeMidnight(clockOutTime) {
   return 0;
 }
 
+// The attendance CSV is the whole company's whole log history (no
+// date/employee filtering happens until AFTER download) and grows forever,
+// so a bare UrlFetchApp.fetch() got slower every week and re-ran on every
+// single login/period-sheet load. CacheService.getScriptCache() caps each
+// value at ~100KB, so the CSV is split across numbered chunk keys plus one
+// "_count" key recording how many chunks to reassemble. Best-effort: if the
+// fetch succeeded but caching fails (e.g. quota), we still return the data,
+// just without speeding up the next call.
+var ATTENDANCE_CACHE_TTL_SEC   = 180;   // balances freshness vs. avoiding refetches
+var ATTENDANCE_CACHE_CHUNK_SIZE = 90000; // stay under CacheService's ~100KB-per-key cap
+
+function fetchAttendanceCsv(csvUrl) {
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'attendanceCsv_' + Utilities.base64EncodeWebSafe(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, csvUrl)
+  );
+
+  var chunkCountStr = cache.get(cacheKey + '_count');
+  if (chunkCountStr) {
+    var chunkCount = parseInt(chunkCountStr, 10);
+    var keys = [];
+    for (var i = 0; i < chunkCount; i++) keys.push(cacheKey + '_' + i);
+    var chunks = cache.getAll(keys);
+    if (keys.every(function(k) { return chunks.hasOwnProperty(k); })) {
+      return keys.map(function(k) { return chunks[k]; }).join('');
+    }
+    // one or more chunks expired/evicted independently — fall through and refetch
+  }
+
+  var csv = UrlFetchApp.fetch(csvUrl).getContentText();
+
+  try {
+    var newChunkCount = Math.ceil(csv.length / ATTENDANCE_CACHE_CHUNK_SIZE) || 1;
+    var toPut = {};
+    for (var j = 0; j < newChunkCount; j++) {
+      toPut[cacheKey + '_' + j] = csv.slice(j * ATTENDANCE_CACHE_CHUNK_SIZE, (j + 1) * ATTENDANCE_CACHE_CHUNK_SIZE);
+    }
+    toPut[cacheKey + '_count'] = String(newChunkCount);
+    cache.putAll(toPut, ATTENDANCE_CACHE_TTL_SEC);
+  } catch (e) {
+    // caching is a best-effort optimization, not correctness-critical
+  }
+
+  return csv;
+}
+
 function handleGetAttendance(payload) {
   // payload: { period_start, period_end, employee_name (optional) }
   var csvUrl = getConfig('attendance_csv_url');
   if (!csvUrl) throw new Error('attendance_csv_url not set in Config.');
-  var response = UrlFetchApp.fetch(csvUrl);
-  var csv = response.getContentText();
+  var csv = fetchAttendanceCsv(csvUrl);
   var rows = Utilities.parseCsv(csv);
   var headers = rows[0];
 
