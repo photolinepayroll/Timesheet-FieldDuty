@@ -210,9 +210,8 @@ function renderPeriodSheet(sheet, opts) {
   if (employeeControls) {
     html += '<thead><tr>' +
       '<th>DATE</th><th>DAY</th><th>SHIFT</th><th>TIME</th><th>BRANCH</th><th>HRS</th>' +
-      '<th>FROM</th><th>TO</th><th>MODE</th><th>FARE AMT</th>' +
-      '<th>MEAL</th><th>ACCOM</th><th>MIDNIGHT</th><th>TOTAL</th>' +
-      '<th>FARE CLAIM</th><th>ACCOM CLAIM</th>' +
+      '<th>FROM</th><th>TO</th><th>MODE</th><th>FARE AMT</th><th>FARE CLAIM</th>' +
+      '<th>MEAL</th><th>ACCOM</th><th>MIDNIGHT</th><th>TOTAL</th><th>ACCOM CLAIM</th>' +
       '</tr></thead><tbody>';
   } else {
     html += '<thead><tr>' +
@@ -378,11 +377,12 @@ function renderPeriodSheet(sheet, opts) {
       '<td colspan="6">TOTALS</td>' +
       '<td colspan="3"></td>' +
       '<td>' + formatCurrency(t.total_fare) + '</td>' +
+      '<td></td>' +
       '<td>' + formatCurrency(t.meal) + '</td>' +
       '<td>' + formatCurrency(t.accom) + '</td>' +
       '<td>' + formatCurrency(t.midnight) + '</td>' +
       '<td>' + formatCurrency(t.total) + '</td>' +
-      '<td colspan="2"></td>' +
+      '<td></td>' +
       '</tr>';
   } else {
     html += '<tr style="font-weight:bold;background:var(--blue2);color:#fff;">' +

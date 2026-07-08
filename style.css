@@ -67,7 +67,7 @@ input, select, textarea {
 
 table { border-collapse: collapse; width: 100%; font-size: 13px; }
 
-th, td { border: 1px solid #ccc; padding: 6px 8px; white-space: nowrap; }
+th, td { border: 1px solid #ccc; padding: 6px 8px; white-space: nowrap; min-width: 48px; }
 
 th { background: var(--blue2); color: #fff; }
 
