@@ -192,6 +192,7 @@ function handleSaveUser(payload) {
     payload.user.id = 'U' + Date.now();
     sh.appendRow(rowFromUser(payload.user));
   }
+  cacheBustSheet('Users');
   return payload.user.id;
 }
 
@@ -275,6 +276,7 @@ function handleSaveRates(payload) {
     var rowData = headers.map(function(h) { return row[h] !== undefined ? row[h] : ''; });
     sh.getRange(i + 2, 1, 1, headers.length).setValues([rowData]);
   });
+  if (payload.sheet === 'EmployeeRates') cacheBustSheet('EmployeeRates');
   return 'saved';
 }
 
@@ -639,13 +641,17 @@ function namesMatch(a, b) {
 // row (employee_name matches, department blank) always wins over a
 // department-wide fallback row (employee_name blank, department matches) for
 // the same area. Returns null if neither exists.
-function resolveEmployeeRate(employeeName, department, destinationArea) {
-  var rates = sheetToObjects('EmployeeRates');
-  var empRow = rates.filter(function(r) {
+// `candidateRows` is the caller's already-scoped subset of EmployeeRates
+// (this employee's own rows + their department's fallback rows) — passed in
+// rather than re-fetched/re-filtered from the full company-wide table on
+// every call (this is called up to twice per day in a period, and the full
+// table only ever needs scoping-down once per request).
+function resolveEmployeeRate(employeeName, department, destinationArea, candidateRows) {
+  var empRow = candidateRows.filter(function(r) {
     return namesMatch(r['employee_name'], employeeName) && r['area'] === destinationArea;
   })[0];
   if (empRow) return empRow;
-  var deptRow = rates.filter(function(r) {
+  var deptRow = candidateRows.filter(function(r) {
     return (!r['employee_name'] || r['employee_name'] === '') &&
            r['department'] === department && r['area'] === destinationArea;
   })[0];
@@ -681,7 +687,7 @@ function resolveAreaByGPS(lat, lng, candidateAreaNames) {
   return best;
 }
 
-function computeMeal(employeeName, department, destinationArea, hoursWorked, motherBranch, destination, wasLogComplete) {
+function computeMeal(employeeName, department, destinationArea, hoursWorked, motherBranch, destination, wasLogComplete, candidateAreaRows) {
   // Rule: no meal at mother branch. A genuinely incomplete log (missing
   // Log In or Log Out, including a day nulled by the 20-hour sanity cap —
   // see handleGetPeriodSheet's wasLogComplete computation) auto-grants
@@ -689,29 +695,30 @@ function computeMeal(employeeName, department, destinationArea, hoursWorked, mot
   // 5+ hours, unchanged from before.
   if (destination === motherBranch) return 0;
   if (wasLogComplete && hoursWorked < 5) return 0;
-  var row = resolveEmployeeRate(employeeName, department, destinationArea);
+  var row = resolveEmployeeRate(employeeName, department, destinationArea, candidateAreaRows);
   if (!row) return 0;
   return parseFloat(row['meal_amount'] || 0);
 }
 
-function computeAccom(employeeName, department, destinationArea, motherBranch, destination) {
+function computeAccom(employeeName, department, destinationArea, motherBranch, destination, candidateAreaRows) {
   // No accommodation at mother branch
   if (destination === motherBranch) return 0;
-  var row = resolveEmployeeRate(employeeName, department, destinationArea);
+  var row = resolveEmployeeRate(employeeName, department, destinationArea, candidateAreaRows);
   if (!row) return 0;
   return parseFloat(row['accom_amount'] || 0);
 }
 
-function computeMidnight(clockOutTime) {
+// `sortedBrackets` is MidnightRates pre-sorted by the caller (once per
+// request) — this used to re-fetch and re-sort on every call, up to twice
+// per day in a period, for a table that never changes within a request.
+function computeMidnight(clockOutTime, sortedBrackets) {
   // clockOutTime: Date object
   if (!clockOutTime) return 0;
   var h = clockOutTime.getHours();
   var m = clockOutTime.getMinutes();
   var totalMin = h * 60 + m;
 
-  var brackets = sheetToObjects('MidnightRates');
-  // Sort by amount descending — apply highest matching bracket
-  brackets.sort(function(a,b) { return b['amount'] - a['amount']; });
+  var brackets = sortedBrackets;
 
   for (var i = 0; i < brackets.length; i++) {
     var b = brackets[i];
@@ -726,16 +733,62 @@ function computeMidnight(clockOutTime) {
   return 0;
 }
 
+// Shared chunked-cache helpers — CacheService.getScriptCache() caps each
+// value at ~100KB, so a large string is split across numbered chunk keys
+// plus one "_count" key recording how many chunks to reassemble. Used by
+// both the attendance-CSV cache below and cachedSheetToObjects() further
+// down, so the chunking dance only needs writing once.
+var CACHE_CHUNK_SIZE = 90000; // stay under CacheService's ~100KB-per-key cap
+
+function cacheGetChunked(cache, key) {
+  var chunkCountStr = cache.get(key + '_count');
+  if (!chunkCountStr) return null;
+  var chunkCount = parseInt(chunkCountStr, 10);
+  var keys = [];
+  for (var i = 0; i < chunkCount; i++) keys.push(key + '_' + i);
+  var chunks = cache.getAll(keys);
+  if (!keys.every(function(k) { return chunks.hasOwnProperty(k); })) {
+    return null; // one or more chunks expired/evicted independently
+  }
+  return keys.map(function(k) { return chunks[k]; }).join('');
+}
+
+function cachePutChunked(cache, key, str, ttlSeconds) {
+  // Best-effort: caching is a speed optimization, not correctness-critical —
+  // if this throws (e.g. quota), the caller already has its data and just
+  // won't get the speedup on the next call.
+  try {
+    var chunkCount = Math.ceil(str.length / CACHE_CHUNK_SIZE) || 1;
+    var toPut = {};
+    for (var j = 0; j < chunkCount; j++) {
+      toPut[key + '_' + j] = str.slice(j * CACHE_CHUNK_SIZE, (j + 1) * CACHE_CHUNK_SIZE);
+    }
+    toPut[key + '_count'] = String(chunkCount);
+    cache.putAll(toPut, ttlSeconds);
+  } catch (e) {
+    // ignore — see comment above
+  }
+}
+
+// Unlike a cache write, a failed bust is NOT swallowed — a write handler
+// that silently fails to invalidate its own cache entry is the one failure
+// mode that risks actually-wrong data (an approved claim looking
+// unapproved), rather than just a slower-than-necessary read. Worst case on
+// a genuine CacheService outage: the short TTL on cachedSheetToObjects()
+// self-heals within seconds.
+function cacheBustChunked(cache, key) {
+  var chunkCountStr = cache.get(key + '_count');
+  var chunkCount = chunkCountStr ? parseInt(chunkCountStr, 10) : 5; // fallback: clear a small fixed range
+  var keys = [key + '_count'];
+  for (var i = 0; i < chunkCount; i++) keys.push(key + '_' + i);
+  cache.removeAll(keys);
+}
+
 // The attendance CSV is the whole company's whole log history (no
 // date/employee filtering happens until AFTER download) and grows forever,
 // so a bare UrlFetchApp.fetch() got slower every week and re-ran on every
-// single login/period-sheet load. CacheService.getScriptCache() caps each
-// value at ~100KB, so the CSV is split across numbered chunk keys plus one
-// "_count" key recording how many chunks to reassemble. Best-effort: if the
-// fetch succeeded but caching fails (e.g. quota), we still return the data,
-// just without speeding up the next call.
-var ATTENDANCE_CACHE_TTL_SEC   = 180;   // balances freshness vs. avoiding refetches
-var ATTENDANCE_CACHE_CHUNK_SIZE = 90000; // stay under CacheService's ~100KB-per-key cap
+// single login/period-sheet load.
+var ATTENDANCE_CACHE_TTL_SEC = 180; // balances freshness vs. avoiding refetches
 
 function fetchAttendanceCsv(csvUrl) {
   var cache = CacheService.getScriptCache();
@@ -743,33 +796,34 @@ function fetchAttendanceCsv(csvUrl) {
     Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, csvUrl)
   );
 
-  var chunkCountStr = cache.get(cacheKey + '_count');
-  if (chunkCountStr) {
-    var chunkCount = parseInt(chunkCountStr, 10);
-    var keys = [];
-    for (var i = 0; i < chunkCount; i++) keys.push(cacheKey + '_' + i);
-    var chunks = cache.getAll(keys);
-    if (keys.every(function(k) { return chunks.hasOwnProperty(k); })) {
-      return keys.map(function(k) { return chunks[k]; }).join('');
-    }
-    // one or more chunks expired/evicted independently — fall through and refetch
-  }
+  var cached = cacheGetChunked(cache, cacheKey);
+  if (cached !== null) return cached;
 
   var csv = UrlFetchApp.fetch(csvUrl).getContentText();
-
-  try {
-    var newChunkCount = Math.ceil(csv.length / ATTENDANCE_CACHE_CHUNK_SIZE) || 1;
-    var toPut = {};
-    for (var j = 0; j < newChunkCount; j++) {
-      toPut[cacheKey + '_' + j] = csv.slice(j * ATTENDANCE_CACHE_CHUNK_SIZE, (j + 1) * ATTENDANCE_CACHE_CHUNK_SIZE);
-    }
-    toPut[cacheKey + '_count'] = String(newChunkCount);
-    cache.putAll(toPut, ATTENDANCE_CACHE_TTL_SEC);
-  } catch (e) {
-    // caching is a best-effort optimization, not correctness-critical
-  }
-
+  cachePutChunked(cache, cacheKey, csv, ATTENDANCE_CACHE_TTL_SEC);
   return csv;
+}
+
+// Caches sheetToObjects() results ACROSS requests (the existing _sheetCache
+// only dedupes reads within one request — reset at the top of every
+// runAction() call). handleGetPeriodSheet reads Users/EmployeeRates/Claims/
+// MealDenials/ShiftTags on every single login/reload; each is a real Sheets-
+// API round trip, so five of them stack on every load. Short TTLs (see call
+// sites) plus explicit cacheBustSheet() calls in every handler that writes
+// one of these sheets keep this from serving stale data after a save.
+function cachedSheetToObjects(name, ttlSeconds) {
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'sheetObjects_' + name;
+  var cached = cacheGetChunked(cache, cacheKey);
+  if (cached !== null) return JSON.parse(cached);
+
+  var rows = sheetToObjects(name); // still populates the per-request _sheetCache as before
+  cachePutChunked(cache, cacheKey, JSON.stringify(rows), ttlSeconds);
+  return rows;
+}
+
+function cacheBustSheet(name) {
+  cacheBustChunked(CacheService.getScriptCache(), 'sheetObjects_' + name);
 }
 
 function handleGetAttendance(payload) {
@@ -849,6 +903,7 @@ function handleSaveClaim(payload) {
   var headers = sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
   var row = headers.map(function(h) { return payload.claim[h] !== undefined ? payload.claim[h] : ''; });
   sh.appendRow(row);
+  cacheBustSheet('Claims');
   return id;
 }
 
@@ -911,6 +966,7 @@ function handleApproveClaim(payload) {
       if (payload.decision === 'approve' && payload.claimed_amount !== undefined && payload.claimed_amount !== '') {
         sh.getRange(i+1, claimedAmtIdx+1).setValue(Number(payload.claimed_amount));
       }
+      cacheBustSheet('Claims');
       return 'done';
     }
   }
@@ -936,11 +992,13 @@ function handleToggleMealDenial(payload) {
     if (rows[i][nameIdx] === payload.employee_name &&
         claimDateKey(rows[i][dateIdx]) === dateKey) {
       sh.deleteRow(i + 1);
+      cacheBustSheet('MealDenials');
       return { denied: false };
     }
   }
 
   sh.appendRow([payload.employee_name, payload.date, payload.denied_by, new Date().toISOString()]);
+  cacheBustSheet('MealDenials');
   return { denied: true };
 }
 
@@ -1011,6 +1069,7 @@ function handleSaveShiftTags(payload) {
     sh.getRange(sh.getLastRow() + 1, 1, toAppend.length, headers.length).setValues(toAppend);
   }
 
+  cacheBustSheet('ShiftTags');
   return { saved: true, count: payload.tags.length };
 }
 
@@ -1091,7 +1150,7 @@ function handleGetPeriodSheet(payload) {
   if (openIn) ensureDay(dayKey(openIn.timestamp), openIn.destination).ins.push(openIn);
 
   // Get employee profile
-  var users = sheetToObjects('Users');
+  var users = cachedSheetToObjects('Users', 30);
   var emp = users.filter(function(u) { return u['name'] === payload.employee_name; })[0];
   if (!emp) throw new Error('Employee not found: ' + payload.employee_name);
 
@@ -1100,7 +1159,7 @@ function handleGetPeriodSheet(payload) {
   // whole EmployeeRates table) because different employees/departments can
   // use differently-named areas — a global lookup would risk matching
   // against some other employee's area name.
-  var allEmployeeRates = sheetToObjects('EmployeeRates');
+  var allEmployeeRates = cachedSheetToObjects('EmployeeRates', 30);
   var candidateAreaRows = allEmployeeRates.filter(function(r) {
     // Case-insensitive: see namesMatch comment near resolveEmployeeRate for why.
     return namesMatch(r['employee_name'], payload.employee_name) ||
@@ -1111,8 +1170,14 @@ function handleGetPeriodSheet(payload) {
     .map(function(r) { return r['area']; })
     .filter(function(a, i, arr) { return a && arr.indexOf(a) === i; }); // distinct, non-blank
 
+  // Sorted once per request and threaded into every computeMidnight() call
+  // below — MidnightRates never changes within a request, so re-sorting it
+  // on every one of the up-to-30 calls in a 15-day period was pure waste.
+  var sortedMidnightBrackets = sheetToObjects('MidnightRates').slice();
+  sortedMidnightBrackets.sort(function(a, b) { return b['amount'] - a['amount']; });
+
   // Get approved special claims for this period
-  var allClaims = sheetToObjects('Claims');
+  var allClaims = cachedSheetToObjects('Claims', 20);
   var specialClaims = allClaims.filter(function(c) {
     return c['employee_name'] === payload.employee_name &&
            c['status'] === 'Approved' &&
@@ -1140,7 +1205,7 @@ function handleGetPeriodSheet(payload) {
   // meal-incomplete-log-auto-grant-design.md). Indexed by date key so
   // the per-day loop below can do an O(1) lookup instead of re-filtering
   // the whole sheet for every day in the period.
-  var mealDenials = sheetToObjects('MealDenials');
+  var mealDenials = cachedSheetToObjects('MealDenials', 30);
   var deniedDates = {};
   mealDenials.forEach(function(d) {
     if (d['employee_name'] === payload.employee_name) {
@@ -1152,7 +1217,7 @@ function handleGetPeriodSheet(payload) {
   // log as 'start' or 'end' of a shift (see handleSaveShiftTag above).
   // Indexed by exact timestamp (not date — a tagged shift can span two
   // calendar dates, e.g. an overnight shift).
-  var shiftTags = sheetToObjects('ShiftTags');
+  var shiftTags = cachedSheetToObjects('ShiftTags', 30);
   var tagByTimestamp = {};
   shiftTags.forEach(function(t) {
     if (t['employee_name'] === payload.employee_name) {
@@ -1228,16 +1293,16 @@ function handleGetPeriodSheet(payload) {
 
     day.hours_worked = Math.round(hoursWorked * 10) / 10;
     day.meal = computeMeal(payload.employee_name, emp['department'], destinationArea,
-                            hoursWorked, emp['mother_branch'], destination, wasComplete);
+                            hoursWorked, emp['mother_branch'], destination, wasComplete, candidateAreaRows);
     day.meal_denied = !!deniedDates[day.ownDate];
     if (day.meal_denied) day.meal = 0;
     day.accom = computeAccom(payload.employee_name, emp['department'], destinationArea,
-                              emp['mother_branch'], destination);
+                              emp['mother_branch'], destination, candidateAreaRows);
     var daySpecialAccom = specialClaims.filter(function(c) {
       return c['type'] === 'accommodation' && claimDateKey(c['date']) === day.ownDate;
     }).reduce(function(s, c) { return s + parseFloat(c['claimed_amount'] || 0); }, 0);
     day.accom += daySpecialAccom;
-    day.midnight = lastOut ? computeMidnight(lastOut) : 0;
+    day.midnight = lastOut ? computeMidnight(lastOut, sortedMidnightBrackets) : 0;
     day.total = day.meal + day.accom + day.midnight; // fare stays segment-level, not summed here
   });
 
@@ -1371,12 +1436,12 @@ function handleGetPeriodSheet(payload) {
     }
 
     var meal     = computeMeal(payload.employee_name, emp['department'], destinationArea,
-                               hoursWorked, emp['mother_branch'], destination, wasLogComplete);
+                               hoursWorked, emp['mother_branch'], destination, wasLogComplete, candidateAreaRows);
     var mealDenied = !!deniedDates[date];
     if (mealDenied) meal = 0;
     var accom    = computeAccom(payload.employee_name, emp['department'], destinationArea,
-                                emp['mother_branch'], destination);
-    var midnight = computeMidnight(lastOut);
+                                emp['mother_branch'], destination, candidateAreaRows);
+    var midnight = computeMidnight(lastOut, sortedMidnightBrackets);
 
     // Find approved special claims for this date
     var daySpecial = specialClaims.filter(function(c) { return claimDateKey(c['date']) === date; });

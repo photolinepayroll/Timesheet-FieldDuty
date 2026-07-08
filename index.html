@@ -121,6 +121,12 @@
         btn.disabled = true;
         btn.textContent = 'Logging in…';
         document.getElementById('login-error').textContent = '';
+        // getConfig doesn't depend on the login result (payload is always
+        // {}, handleGetConfig does no auth check) -- firing it in parallel
+        // with the login request instead of nesting it in the success
+        // callback saves one full round trip off perceived login time. A
+        // failed login just means this one harmless GET was wasted.
+        loadEmployeeConfig();
         login(name, pin, function(err, user) {
           if (err) {
             btn.disabled = false;
@@ -132,7 +138,6 @@
           document.getElementById('login-view').style.display   = 'none';
           document.getElementById('employee-view').style.display = 'block';
           document.getElementById('welcome-msg').textContent = 'Welcome, ' + user.name;
-          loadEmployeeConfig(user);
         });
       });
 
@@ -474,7 +479,7 @@
       return window._plConfig || null;
     }
 
-    function loadEmployeeConfig(user) {
+    function loadEmployeeConfig() {
       api('getConfig', {}, function(err, data) {
         if (err) return;
         window._plConfig = {};
