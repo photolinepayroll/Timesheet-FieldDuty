@@ -44,11 +44,11 @@
     </div>
 
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
-      <label style="font-weight:600;">Period:</label>
+      <label style="font-weight:600;">Period: <span style="font-weight:400;font-size:.78em;color:#888;">(YYYY-MM-DD)</span></label>
       <input id="inp-period-start" type="date" style="padding:6px;">
       <span>—</span>
       <input id="inp-period-end" type="date" style="padding:6px;">
-      <button onclick="loadCurrentTab()" style="padding:6px 16px;">Load</button>
+      <button id="btn-load" onclick="loadCurrentTab()" style="padding:6px 16px;">Load</button>
     </div>
 
     <div class="emp-tabs">
@@ -116,6 +116,23 @@
   <script src="app.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      // Restore an existing session on reload. sessionStorage (see app.js's
+      // currentUser()) survives a same-tab refresh, but the login-view →
+      // employee-view swap used to only happen inside the login button's
+      // success handler — so refreshing the page always fell back to the
+      // login form even though the employee was still logged in.
+      var existingUser = currentUser();
+      if (existingUser) {
+        if (existingUser.role === 'head') {
+          window.location.href = 'admin.html';
+          return;
+        }
+        document.getElementById('login-view').style.display = 'none';
+        document.getElementById('employee-view').style.display = 'block';
+        document.getElementById('welcome-msg').textContent = 'Welcome, ' + existingUser.name;
+        loadEmployeeConfig();
+      }
+
       document.getElementById('btn-login').addEventListener('click', function() {
         var name = document.getElementById('inp-name').value.trim();
         var pin  = document.getElementById('inp-pin').value.trim();
@@ -258,9 +275,22 @@
       window._plConfig.period_end   = end;
       var active = document.querySelector('.emp-tab.active');
       var tabId  = active ? active.id.replace('tab-btn-', '') : 'sheet';
-      if (tabId === 'sheet')      loadEmployeePeriodSheet(user, { period_start: start, period_end: end });
-      if (tabId === 'claims')     loadMyClaims(user);
-      if (tabId === 'attendance') loadAttendance(user, { period_start: start, period_end: end });
+      // The tab's own loader already swaps its output area to a "Loading…"
+      // placeholder, but the Load button itself gave no feedback — clicking
+      // it could read as unresponsive on a slow connection. Disable it and
+      // swap its label for the duration of the fetch, restored via the
+      // shared `done` callback every loader now accepts (fires on both
+      // success and error, so the button never gets stuck disabled).
+      var btn = document.getElementById('btn-load');
+      btn.disabled = true;
+      btn.textContent = 'Loading…';
+      function done() {
+        btn.disabled = false;
+        btn.textContent = 'Load';
+      }
+      if (tabId === 'sheet')      loadEmployeePeriodSheet(user, { period_start: start, period_end: end }, done);
+      if (tabId === 'claims')     loadMyClaims(user, done);
+      if (tabId === 'attendance') loadAttendance(user, { period_start: start, period_end: end }, done);
     }
 
     // ---- Inline claim form ----
@@ -477,7 +507,7 @@
     // set at login by the server's handleLogin response) — never from any
     // user-editable form field, URL parameter, or other client-controlled
     // input — so an employee cannot view another employee's data.
-    function loadEmployeePeriodSheet(user, config) {
+    function loadEmployeePeriodSheet(user, config, done) {
       var out = document.getElementById('emp-period-sheet');
       out.innerHTML = '<p>Loading your period sheet…</p>';
       window._pendingShiftTags = {};
@@ -487,19 +517,32 @@
         period_start:  config.period_start,
         period_end:    config.period_end
       }, function(err, sheet) {
-        if (err) { out.innerHTML = '<p style="color:red;">' + escapeHtml(err.message) + '</p>'; return; }
+        if (err) {
+          out.innerHTML = '<p style="color:red;">' + escapeHtml(err.message) + '</p>';
+          if (done) done();
+          return;
+        }
         window._lastPeriodSheet = sheet;
         out.innerHTML = renderPeriodSheet(sheet, { employeeControls: true });
+        if (done) done();
       });
     }
 
     // ---- Expense Claims tab ----
-    function loadMyClaims(user) {
+    function loadMyClaims(user, done) {
       var out = document.getElementById('emp-claims-list');
       out.innerHTML = '<p>Loading your claims…</p>';
       api('getClaims', { employee_name: user.name }, function(err, claims) {
-        if (err) { out.innerHTML = '<p style="color:red;">' + escapeHtml(err.message) + '</p>'; return; }
-        if (!claims || !claims.length) { out.innerHTML = '<p>No claims submitted yet.</p>'; return; }
+        if (err) {
+          out.innerHTML = '<p style="color:red;">' + escapeHtml(err.message) + '</p>';
+          if (done) done();
+          return;
+        }
+        if (!claims || !claims.length) {
+          out.innerHTML = '<p>No claims submitted yet.</p>';
+          if (done) done();
+          return;
+        }
         claims.sort(function(a, b) { return a.date < b.date ? 1 : -1; }); // newest-first
         var html = '<div class="table-scroll"><table>' +
           '<thead><tr><th>DATE</th><th>TYPE</th><th>FROM → TO</th><th>MODE</th><th>AMOUNT</th><th>STATUS</th></tr></thead><tbody>';
@@ -517,21 +560,34 @@
         });
         html += '</tbody></table></div>';
         out.innerHTML = html;
+        if (done) done();
       });
     }
 
     // ---- Attendance tab ----
-    function loadAttendance(user, config) {
+    function loadAttendance(user, config, done) {
       var out = document.getElementById('emp-attendance-list');
-      if (!config) { out.innerHTML = '<p>Config not loaded yet — try again in a moment.</p>'; return; }
+      if (!config) {
+        out.innerHTML = '<p>Config not loaded yet — try again in a moment.</p>';
+        if (done) done();
+        return;
+      }
       out.innerHTML = '<p>Loading attendance…</p>';
       api('getAttendance', {
         employee_name: user.name,
         period_start:  config.period_start,
         period_end:    config.period_end
       }, function(err, records) {
-        if (err) { out.innerHTML = '<p style="color:red;">' + escapeHtml(err.message) + '</p>'; return; }
-        if (!records || !records.length) { out.innerHTML = '<p>No attendance records found for this period.</p>'; return; }
+        if (err) {
+          out.innerHTML = '<p style="color:red;">' + escapeHtml(err.message) + '</p>';
+          if (done) done();
+          return;
+        }
+        if (!records || !records.length) {
+          out.innerHTML = '<p>No attendance records found for this period.</p>';
+          if (done) done();
+          return;
+        }
         records.sort(function(a, b) { return a.timestamp > b.timestamp ? 1 : -1; });
         var html = '<div class="table-scroll"><table>' +
           '<thead><tr><th>DATE</th><th>TIME</th><th>TYPE</th><th>DESTINATION</th><th>GPS</th></tr></thead><tbody>';
@@ -553,6 +609,7 @@
         });
         html += '</tbody></table></div>';
         out.innerHTML = html;
+        if (done) done();
       });
     }
   </script>
