@@ -100,6 +100,7 @@ var HANDLERS = {
   'login':            { fn: handleLogin,           get: true  },
   'getUsers':         { fn: handleGetUsers,        get: true  },
   'saveUser':         { fn: handleSaveUser,        get: false },
+  'deleteUser':       { fn: handleDeleteUser,      get: false },
   'getRates':         { fn: handleGetRates,        get: true  },
   'saveRates':        { fn: handleSaveRates,       get: false },
   'getAttendance':    { fn: handleGetAttendance,   get: true  },
@@ -194,6 +195,23 @@ function handleSaveUser(payload) {
   }
   cacheBustSheet('Users');
   return payload.user.id;
+}
+
+// Removes a Users row by id — only their login/user record. Historical
+// Claims/EmployeeRates rows are untouched since those are keyed by
+// employee name, not by this row, so past claims and rate history survive
+// a deleted user intact.
+function handleDeleteUser(payload) {
+  var sh = getSheet('Users');
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (rows[i][0] === payload.id) {
+      sh.deleteRow(i + 1);
+      cacheBustSheet('Users');
+      return true;
+    }
+  }
+  throw new Error('User not found.');
 }
 
 // Audit tool for the admin Employees tab: surfaces two previously-invisible

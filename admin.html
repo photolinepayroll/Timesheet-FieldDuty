@@ -81,7 +81,7 @@
           <input id="uf-active" type="checkbox" checked> Active
         </label>
         <div style="display:flex;gap:8px;">
-          <button onclick="saveUser()">Save</button>
+          <button id="btn-save-user" onclick="saveUser()">Save</button>
           <button onclick="document.getElementById('user-form-wrap').style.display='none'">Cancel</button>
         </div>
         <p id="uf-msg" style="color:green;margin-top:8px;"></p>
@@ -180,6 +180,23 @@
       window._pendingShiftTags = {};
       loadUsers();
       initTabs();
+      document.getElementById('users-tbody').addEventListener('click', function(ev) {
+        var btn = ev.target.closest('.btn-delete-user');
+        if (!btn || btn.disabled) return;
+        var id = btn.dataset.id, name = btn.dataset.name;
+        if (!confirm('Delete ' + name + '? This cannot be undone.')) return;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="pl-spinner"></span>Deleting…';
+        api('deleteUser', { id: id }, function(err) {
+          if (err) {
+            alert(err.message);
+            btn.disabled = false;
+            btn.textContent = 'Delete';
+            return;
+          }
+          loadUsers();
+        });
+      });
       document.getElementById('period-sheet-output').addEventListener('click', function(ev) {
         var mealBtn = ev.target.closest('.meal-deny-btn');
         if (mealBtn) {
@@ -260,11 +277,14 @@
     }
 
     function loadUsers() {
+      var tbody = document.getElementById('users-tbody');
+      tbody.innerHTML = '<tr><td colspan="7">' + loadingSpinnerHtml('Loading employees…') + '</td></tr>';
       api('getUsers', {}, function(err, users) {
         if (err) { alert(err.message); return; }
-        var tbody = document.getElementById('users-tbody');
         tbody.innerHTML = '';
-        users.forEach(function(u) {
+
+        function isActive(u) { return u.active === true || u.active === 'TRUE'; }
+        function renderRow(u) {
           var tr = document.createElement('tr');
           tr.innerHTML =
             '<td>' + u.name + '</td>' +
@@ -273,8 +293,28 @@
             '<td>' + u.position_level + '</td>' +
             '<td>' + u.role + '</td>' +
             '<td>' + (u.active ? '✓' : '✗') + '</td>' +
-            '<td><button onclick="openUserForm(' + JSON.stringify(u).replace(/"/g,"'") + ')">Edit</button></td>';
+            '<td>' +
+              '<button onclick="openUserForm(' + JSON.stringify(u).replace(/"/g,"'") + ')">Edit</button> ' +
+              '<button class="btn-delete-user" data-id="' + u.id + '" data-name="' + escapeHtml(u.name) + '" ' +
+                (isActive(u) ? 'disabled title="Set Inactive first to enable delete"' : '') +
+                ' style="background:#b00020;margin-left:4px;">Delete</button>' +
+            '</td>';
           tbody.appendChild(tr);
+        }
+
+        // Grouped so the admin can quickly see who's eligible for deletion
+        // (Delete is only enabled once an employee is set Inactive — see
+        // the click handler below and renderRow's `disabled` gate above).
+        [
+          { label: 'Active Employees',   list: users.filter(isActive) },
+          { label: 'Inactive Employees', list: users.filter(function(u) { return !isActive(u); }) }
+        ].forEach(function(group) {
+          if (!group.list.length) return;
+          var header = document.createElement('tr');
+          header.innerHTML = '<td colspan="7" style="background:var(--blue1);font-weight:bold;color:var(--blue2);">' +
+            escapeHtml(group.label) + ' (' + group.list.length + ')</td>';
+          tbody.appendChild(header);
+          group.list.forEach(renderRow);
         });
       });
     }
@@ -293,7 +333,7 @@
     function checkNameMatches() {
       var btn = document.getElementById('btn-check-names');
       btn.disabled = true;
-      btn.textContent = 'Checking…';
+      btn.innerHTML = '<span class="pl-spinner"></span>Checking…';
       api('checkNameMatches', {}, function(err, result) {
         btn.disabled = false;
         btn.textContent = 'Check Name Matches';
@@ -398,7 +438,12 @@
         active:         document.getElementById('uf-active').checked
       };
       if (!user.name || !user.pin) { alert('Name and PIN are required.'); return; }
+      var saveBtn = document.getElementById('btn-save-user');
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<span class="pl-spinner"></span>Saving…';
       api('saveUser', { user: user }, function(err) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save';
         if (err) { alert(err.message); return; }
         document.getElementById('uf-msg').textContent = 'Saved!';
         loadUsers();
@@ -435,12 +480,13 @@
     };
 
     function loadRates() {
+      var wrap = document.getElementById('rates-tables');
+      wrap.innerHTML = loadingSpinnerHtml('Loading rate tables…');
       api('getRates', {}, function(err, data) {
         if (err) { alert(err.message); return; }
         // Cached for the EmployeeRates table's searchable Area dropdown —
         // see buildRateRow()/wireAreaAutocomplete() below.
         window._areaCentersList = data.areaCenters || [];
-        var wrap = document.getElementById('rates-tables');
         wrap.innerHTML = '';
         RATE_TABLES.forEach(function(cfg) {
           var rows = data[RATE_DATA_KEY[cfg.sheet]] || [];
@@ -669,6 +715,7 @@
       };
 
       var saveBtn = document.createElement('button');
+      saveBtn.id = 'btn-save-rates-' + cfg.sheet;
       saveBtn.textContent = 'Save All';
       saveBtn.onclick = function() { saveGroupedEmployeeRates(cfg); };
 
@@ -728,7 +775,12 @@
         });
         return row;
       });
+      var saveBtn = document.getElementById('btn-save-rates-' + cfg.sheet);
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<span class="pl-spinner"></span>Saving…';
       api('saveRates', { sheet: cfg.sheet, rows: rows }, function(err) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save All';
         var msg = document.getElementById('rates-msg-' + cfg.sheet);
         if (err) { alert(err.message); return; }
         if (msg) {
@@ -1018,14 +1070,43 @@
 
     function printPeriodSheet() {
       var content = document.getElementById('printable-sheet');
-      if (!content) { alert('Generate a period sheet first.'); return; }
+      var sheet = window._lastPeriodSheet;
+      if (!content || !sheet) { alert('Generate a period sheet first.'); return; }
       var w = window.open('', '_blank');
       w.document.write('<html><head><title>Employee Timesheet</title>' +
-        '<style>body{font-family:Arial,sans-serif;font-size:12px;}' +
-        'table{border-collapse:collapse;width:100%;}' +
-        'th,td{border:1px solid #999;padding:4px 6px;}' +
-        'th{background:#1a1a2e;color:#fff;}</style></head><body>');
+        '<style>' +
+          '@page { margin: 1.5cm; }' +
+          'body{font-family:Arial,sans-serif;font-size:13px;color:#1a1a2e;}' +
+          '.print-header{text-align:center;margin-bottom:10px;}' +
+          '.print-company{font-size:20px;font-weight:bold;letter-spacing:1px;}' +
+          '.print-title{font-size:15px;margin-top:2px;}' +
+          '.print-period{font-size:12px;color:#444;margin-top:2px;}' +
+          '.print-header hr{border:none;border-top:2px solid #1a1a2e;margin-top:10px;}' +
+          'table{border-collapse:collapse;width:100%;}' +
+          'thead{display:table-header-group;}' +
+          'tr{page-break-inside:avoid;}' +
+          'th,td{border:1px solid #999;padding:4px 6px;}' +
+          'th{background:#1a1a2e;color:#fff;}' +
+          '.print-signatures{display:flex;justify-content:space-between;margin-top:60px;page-break-inside:avoid;}' +
+          '.sig-block{width:30%;text-align:center;font-size:12px;}' +
+          '.sig-line{border-top:1px solid #1a1a2e;margin-bottom:6px;}' +
+        '</style></head><body>');
+      w.document.write(
+        '<div class="print-header">' +
+          '<div class="print-company">PHOTOLINE</div>' +
+          '<div class="print-title">Employee Timesheet</div>' +
+          '<div class="print-period">Period: ' + escapeHtml(sheet.period_start) + ' — ' + escapeHtml(sheet.period_end) + '</div>' +
+          '<hr>' +
+        '</div>'
+      );
       w.document.write(content.outerHTML);
+      w.document.write(
+        '<div class="print-signatures">' +
+          '<div class="sig-block"><div class="sig-line">&nbsp;</div>Prepared by</div>' +
+          '<div class="sig-block"><div class="sig-line">&nbsp;</div>Checked by</div>' +
+          '<div class="sig-block"><div class="sig-line">&nbsp;</div>Approved by</div>' +
+        '</div>'
+      );
       w.document.write('</body></html>');
       w.document.close();
       w.print();
