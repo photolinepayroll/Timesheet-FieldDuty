@@ -115,6 +115,13 @@ tr:nth-child(even) { background: #f5f5f5; }
 }
 .fare-picker-item:last-child { border-bottom: none; }
 
+/* ---------- Claim status badges (employee timesheet, both self-service and admin views) ---------- */
+
+.claim-status-badge { padding:2px 10px; border-radius:12px; font-size:.82em; font-weight:600; display:inline-block; }
+.claim-status-approved  { background:#d4f7d4; color:#1a6e1a; }
+.claim-status-submitted { background:#fff3cd; color:#7a5a00; }
+.claim-status-rejected  { background:#ffd6d6; color:#8b0000; }
+
 /* ---------- Employee autocomplete (Approve Claims / Period Sheets) ---------- */
 
 .emp-ac-list {

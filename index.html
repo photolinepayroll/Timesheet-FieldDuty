@@ -11,10 +11,6 @@
     .emp-tab  { padding:8px 20px; border:1.5px solid var(--blue2,#1a73e8); border-radius:4px;
                 background:#fff; cursor:pointer; font-weight:600; color:var(--blue2,#1a73e8); }
     .emp-tab.active { background:var(--blue2,#1a73e8); color:#fff; }
-    .claim-status-badge { padding:2px 10px; border-radius:12px; font-size:.82em; font-weight:600; display:inline-block; }
-    .claim-status-approved  { background:#d4f7d4; color:#1a6e1a; }
-    .claim-status-submitted { background:#fff3cd; color:#7a5a00; }
-    .claim-status-rejected  { background:#ffd6d6; color:#8b0000; }
     #emp-inline-claim { display:none; }
     .emp-claim-btn { font-size:.78em; padding:3px 9px; cursor:pointer; }
     #cl-date[disabled] { background:#f0f0f0; opacity:.85; }
@@ -258,41 +254,6 @@
       if (tabId === 'sheet')      loadEmployeePeriodSheet(user, { period_start: start, period_end: end });
       if (tabId === 'claims')     loadMyClaims(user);
       if (tabId === 'attendance') loadAttendance(user, { period_start: start, period_end: end });
-    }
-
-    // ---- Fare-claim picker (multi-segment days) ----
-    // The FARE CLAIM cell's data-segs attribute (set in app.js's
-    // renderPeriodSheet) carries each segment's date/segKey/label/status
-    // for this one day-range — built here on click rather than embedded as
-    // markup in the initial render, so the row's HTML stays lean.
-    function closeAllFarePickers() {
-      document.querySelectorAll('.fare-picker-list.open').forEach(function(el) { el.remove(); });
-    }
-
-    function toggleFarePicker(btn) {
-      var existing = btn.parentNode.querySelector('.fare-picker-list');
-      var wasOpenHere = !!existing;
-      closeAllFarePickers();
-      if (wasOpenHere) return; // clicking the same button again just closes it
-
-      var segs = JSON.parse(btn.dataset.segs);
-      var list = document.createElement('div');
-      list.className = 'fare-picker-list open';
-      list.innerHTML = segs.map(function(s) {
-        // The mini "+ Fare" button carries its own date/type/seg data
-        // attributes, same as any other .emp-claim-btn, so it's handled by
-        // the existing delegated click handler with no extra logic needed —
-        // a claimed item (badge, no button) simply has nothing to click.
-        var right = !s.status
-          ? '<button type="button" class="emp-claim-btn" data-date="' + escapeHtml(s.date) + '" data-seg="' + escapeHtml(s.segKey) + '" data-type="special-fare">+ Fare</button>'
-          : '<span class="claim-status-badge claim-status-' + s.status.toLowerCase() + '">' +
-              (s.status === 'Approved' ? '✓ ' + formatCurrency(s.amount) : '⏳ Pending') +
-            '</span>';
-        return '<div class="fare-picker-item">' +
-          '<span>' + escapeHtml(s.label) + '</span>' + right +
-          '</div>';
-      }).join('');
-      btn.parentNode.appendChild(list);
     }
 
     // ---- Inline claim form ----

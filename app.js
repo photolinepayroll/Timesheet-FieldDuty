@@ -185,6 +185,10 @@ function renderPeriodSheet(sheet, opts) {
   opts = opts || {};
   var adminControls    = !!opts.adminControls;
   var employeeControls = !!opts.employeeControls;
+  // Default true so index.html's existing call (which never sets this) is
+  // unaffected — admin.html's per-log view passes false since claims there
+  // are managed via the separate Approve Claims tab, not filed from here.
+  var claimsInteractive = opts.claimsInteractive !== false;
   var e = sheet.employee;
   // Days-worked/total-hours summary — employee view only, derived from
   // sheet.days (one entry per RESOLVED Start/End tag pair — see
@@ -212,6 +216,7 @@ function renderPeriodSheet(sheet, opts) {
       '<th>DATE</th><th>DAY</th><th>SHIFT</th><th>TIME</th><th>BRANCH</th><th>HRS</th>' +
       '<th>FARE AMT</th><th>FARE CLAIM</th>' +
       '<th>MEAL</th><th>ACCOM</th><th>MIDNIGHT</th><th>TOTAL</th><th>ACCOM CLAIM</th>' +
+      (adminControls ? '<th>MEAL CTRL</th>' : '') +
       '</tr></thead><tbody>';
   } else {
     html += '<thead><tr>' +
@@ -232,7 +237,7 @@ function renderPeriodSheet(sheet, opts) {
     // stacking one "+ Fare" button per segment made a multi-segment day look
     // cluttered/confusing, so all of a range's segments now collapse into
     // one merged FARE AMT/FARE CLAIM cell, with a picker dropdown (see
-    // openFarePicker in index.html) when a range has more than one segment.
+    // toggleFarePicker below) when a range has more than one segment.
     var daysByNumber = {};
     (sheet.days || []).forEach(function(d) { daysByNumber[d.dayNumber] = d; });
     var rowsByDate = {};
@@ -292,22 +297,50 @@ function renderPeriodSheet(sheet, opts) {
       if (pickerItems.length === 1) {
         var only = pickerItems[0];
         if (!only.status) {
-          claimCellInner = '<button class="emp-claim-btn" data-date="' + escapeHtml(only.date) + '" data-seg="' + escapeHtml(only.segKey) + '" data-type="special-fare">+ Fare</button>';
+          claimCellInner = claimsInteractive
+            ? '<button class="emp-claim-btn" data-date="' + escapeHtml(only.date) + '" data-seg="' + escapeHtml(only.segKey) + '" data-type="special-fare">+ Fare</button>'
+            : 'Not filed';
         } else {
           var soloLabel = only.status === 'Approved' ? '✓ Approved' : '⏳ Pending';
           claimCellInner = '<span class="claim-status-badge claim-status-' + escapeHtml(only.status.toLowerCase()) + '">' + soloLabel + '</span>';
         }
       } else if (pickerItems.length > 1) {
         var unclaimed = pickerItems.filter(function(p) { return !p.status; }).length;
+        // The toggle itself stays clickable either way (admin can still see
+        // the per-segment breakdown) -- data-interactive tells
+        // toggleFarePicker() (below) whether an unclaimed segment inside
+        // the opened list gets a "+ Fare" action button or plain text.
         claimCellInner =
           '<div class="fare-picker">' +
-            '<button type="button" class="fare-picker-btn" data-segs=\'' + escapeHtml(JSON.stringify(pickerItems)) + '\'>' +
+            '<button type="button" class="fare-picker-btn" data-interactive="' + claimsInteractive + '" data-segs=\'' + escapeHtml(JSON.stringify(pickerItems)) + '\'>' +
               'Fare (' + (pickerItems.length - unclaimed) + '/' + pickerItems.length + ')' +
             '</button>' +
           '</div>';
       }
       var claimCell = '<td rowspan="' + rowspanLen + '">' + claimCellInner + '</td>';
       return amtCell + claimCell;
+    }
+
+    // Admin-only (adminControls) MEAL CTRL cell, shared by the resolved-Day
+    // path and the standalone-row calendar-date fallback below. Markup is
+    // byte-identical to the old adminControls-only branch's meal-ctrl cell
+    // (same .meal-deny-btn class/data-date/data-denied attributes, same
+    // data-status-for span) so admin.html's existing saveMealChanges() --
+    // which reads these generically by class/data-attribute -- needs no
+    // changes. `row` can be undefined (no sheet.rows entry at all for this
+    // date, shouldn't normally happen) -- renders an empty cell rather than
+    // throwing.
+    function buildMealCtrlCell(row, rowspanLen) {
+      var rsAttr = rowspanLen ? (' rowspan="' + rowspanLen + '"') : '';
+      if (!row || !(row.meal > 0 || row.meal_denied)) return '<td' + rsAttr + '></td>';
+      return '<td' + rsAttr + '>' +
+        '<span data-status-for="' + escapeHtml(row.date) + '" style="font-weight:bold;color:' + (row.meal_denied ? '#b00020' : '#0a7d2c') + ';margin-right:6px;">' +
+          (row.meal_denied ? 'DENIED' : 'ALLOWED') +
+        '</span>' +
+        '<button class="meal-deny-btn" data-date="' + escapeHtml(row.date) + '" data-denied="' + !!row.meal_denied + '" ' +
+          'style="background:' + (row.meal_denied ? '#b00020' : '#1a1a2e') + ';">' +
+          (row.meal_denied ? 'Allow Meal' : 'Deny Meal') +
+        '</button></td>';
     }
 
     logs.forEach(function(row, i) {
@@ -343,14 +376,36 @@ function renderPeriodSheet(sheet, opts) {
         var ownClaimDetails = (ownDateRow && ownDateRow.claim_details) || [];
         var accumClaim = ownClaimDetails.filter(function(c) { return c.type === 'accommodation'; })[0] || null;
         if (!accumClaim) {
-          html += '<td rowspan="' + sp.daySpanLength + '"><button class="emp-claim-btn" data-date="' + escapeHtml(sp.day.ownDate) + '" data-type="accommodation">+ Accom</button></td>';
+          html += '<td rowspan="' + sp.daySpanLength + '">' + (claimsInteractive
+            ? '<button class="emp-claim-btn" data-date="' + escapeHtml(sp.day.ownDate) + '" data-type="accommodation">+ Accom</button>'
+            : 'Not filed') + '</td>';
         } else {
           var accumLabel = accumClaim.status === 'Approved' ? '✓ Approved' : '⏳ Pending';
           html += '<td rowspan="' + sp.daySpanLength + '"><span class="claim-status-badge claim-status-' + escapeHtml(accumClaim.status.toLowerCase()) + '">' + accumLabel + '</span></td>';
         }
+        if (adminControls) html += buildMealCtrlCell(rowsByDate[sp.day.ownDate], sp.daySpanLength);
       } else if (!sp.dayContinuation) {
         html += buildFareCells(i, 1, 1);
-        html += '<td></td><td></td><td></td><td></td><td></td>';
+        // A standalone row (no resolved Start/End Day) used to leave MEAL/
+        // ACCOM/MIDNIGHT/TOTAL blank -- fine for the employee's own view
+        // (encourages tagging), but admin's payroll view needs to see the
+        // calendar-date auto-computed values regardless of whether the
+        // employee has tagged anything. Falls back to that date's
+        // already-computed sheet.rows entry. Kept simple (rowspan=1, no new
+        // date-grouping): a date with several untagged stray logs just
+        // repeats the same day-level value on each of its rows.
+        var fallbackRow = rowsByDate[row.date];
+        if (fallbackRow) {
+          html +=
+            '<td>' + formatCurrency(fallbackRow.meal) + '</td>' +
+            '<td>' + formatCurrency(fallbackRow.accom) + '</td>' +
+            '<td>' + formatCurrency(fallbackRow.midnight) + '</td>' +
+            '<td><b>' + formatCurrency(fallbackRow.total_allowance) + '</b></td>' +
+            '<td></td>'; // ACCOM CLAIM -- no resolved Day to anchor a claim to here
+        } else {
+          html += '<td></td><td></td><td></td><td></td><td></td>';
+        }
+        if (adminControls) html += buildMealCtrlCell(fallbackRow);
       }
 
       html += '</tr>';
@@ -428,6 +483,7 @@ function renderPeriodSheet(sheet, opts) {
       '<td>' + formatCurrency(t.midnight) + '</td>' +
       '<td>' + formatCurrency(t.total) + '</td>' +
       '<td></td>' +
+      (adminControls ? '<td></td>' : '') +
       '</tr>';
   } else {
     html += '<tr style="font-weight:bold;background:var(--blue2);color:#fff;">' +
@@ -444,6 +500,53 @@ function renderPeriodSheet(sheet, opts) {
   }
   html += '</tbody></table></div></div>';
   return html;
+}
+
+// ---- Fare-claim picker (multi-segment days) ----
+// Shared by index.html (employee, interactive) and admin.html (admin,
+// view-only). The FARE CLAIM cell's data-segs attribute (set above in
+// buildFareCells) carries each segment's date/segKey/label/status for this
+// one day-range — built here on click rather than embedded as markup in
+// the initial render, so the row's HTML stays lean. data-interactive
+// (also set in buildFareCells, from opts.claimsInteractive) controls
+// whether an unclaimed segment inside the opened list gets a "+ Fare"
+// action button (employee) or plain "Not filed" text (admin) — the picker
+// toggle itself always opens/closes regardless, since the segment
+// breakdown is useful information either way.
+function closeAllFarePickers() {
+  document.querySelectorAll('.fare-picker-list.open').forEach(function(el) { el.remove(); });
+}
+
+function toggleFarePicker(btn) {
+  var existing = btn.parentNode.querySelector('.fare-picker-list');
+  var wasOpenHere = !!existing;
+  closeAllFarePickers();
+  if (wasOpenHere) return; // clicking the same button again just closes it
+
+  var segs = JSON.parse(btn.dataset.segs);
+  var interactive = btn.dataset.interactive !== 'false';
+  var list = document.createElement('div');
+  list.className = 'fare-picker-list open';
+  list.innerHTML = segs.map(function(s) {
+    // The mini "+ Fare" button carries its own date/type/seg data
+    // attributes, same as any other .emp-claim-btn, so it's handled by
+    // the existing delegated click handler with no extra logic needed —
+    // a claimed item (badge, no button) simply has nothing to click.
+    var right;
+    if (s.status) {
+      right = '<span class="claim-status-badge claim-status-' + s.status.toLowerCase() + '">' +
+          (s.status === 'Approved' ? '✓ ' + formatCurrency(s.amount) : '⏳ Pending') +
+        '</span>';
+    } else if (interactive) {
+      right = '<button type="button" class="emp-claim-btn" data-date="' + escapeHtml(s.date) + '" data-seg="' + escapeHtml(s.segKey) + '" data-type="special-fare">+ Fare</button>';
+    } else {
+      right = 'Not filed';
+    }
+    return '<div class="fare-picker-item">' +
+      '<span>' + escapeHtml(s.label) + '</span>' + right +
+      '</div>';
+  }).join('');
+  btn.parentNode.appendChild(list);
 }
 
 // ---- Attendance ----

@@ -28,7 +28,7 @@
       <button class="tab-btn active" data-tab="employees">Employees</button>
       <button class="tab-btn" data-tab="rates">Rate Tables</button>
       <button class="tab-btn" data-tab="claims">Approve Claims</button>
-      <button class="tab-btn" data-tab="periods">Period Sheets</button>
+      <button class="tab-btn" data-tab="periods">Employee Timesheet</button>
     </div>
 
     <!-- Tab: Employees -->
@@ -129,7 +129,7 @@
 
     <!-- Tab: Period Sheets -->
     <div id="tab-periods" class="tab-panel" style="display:none;">
-      <div class="section-title">Generate Period Sheet</div>
+      <div class="section-title">Generate Employee Timesheet</div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;align-items:flex-end;">
         <div>
           <label>Employee</label><br>
@@ -152,6 +152,7 @@
         <button onclick="printPeriodSheet()" style="padding:8px 18px;">🖨 Print</button>
         <button onclick="exportPeriodCSV(window._lastPeriodSheet)" style="padding:8px 18px;">⬇ Export CSV</button>
         <button id="save-meal-btn" onclick="saveMealChanges()" style="padding:8px 18px;display:none;">💾 Save Meal Changes</button>
+        <button id="save-shift-btn" onclick="saveShiftChangesAdmin()" style="padding:8px 18px;display:none;">💾 Save Shift Changes</button>
       </div>
 
       <div id="period-sheet-output"></div>
@@ -176,32 +177,61 @@
       var user = requireLogin('head');
       if (!user) return;
       window._pendingMealChanges = {};
+      window._pendingShiftTags = {};
       loadUsers();
       initTabs();
       document.getElementById('period-sheet-output').addEventListener('click', function(ev) {
-        var btn = ev.target.closest('.meal-deny-btn');
-        if (!btn) return;
-        // Flip the button's own label only — no server call here. The
-        // actual toggleMealDenial writes are batched up and sent when the
-        // admin clicks "Save Meal Changes", since round-tripping (and the
-        // subsequent full period-sheet re-fetch) on every single click was
-        // too slow for reviewing a whole sheet's rows in sequence.
-        var date = btn.dataset.date;
-        var nowDenied = btn.dataset.denied !== 'true'; // flip
-        btn.dataset.denied = nowDenied;
-        btn.textContent = nowDenied ? 'Allow Meal' : 'Deny Meal';
-        btn.style.background = nowDenied ? '#b00020' : '#1a1a2e';
-        var statusEl = document.querySelector('[data-status-for="' + date + '"]');
-        if (statusEl) {
-          statusEl.textContent = nowDenied ? 'DENIED' : 'ALLOWED';
-          statusEl.style.color = nowDenied ? '#b00020' : '#0a7d2c';
+        var mealBtn = ev.target.closest('.meal-deny-btn');
+        if (mealBtn) {
+          // Flip the button's own label only — no server call here. The
+          // actual toggleMealDenial writes are batched up and sent when the
+          // admin clicks "Save Meal Changes", since round-tripping (and the
+          // subsequent full period-sheet re-fetch) on every single click was
+          // too slow for reviewing a whole sheet's rows in sequence.
+          var date = mealBtn.dataset.date;
+          var nowDenied = mealBtn.dataset.denied !== 'true'; // flip
+          mealBtn.dataset.denied = nowDenied;
+          mealBtn.textContent = nowDenied ? 'Allow Meal' : 'Deny Meal';
+          mealBtn.style.background = nowDenied ? '#b00020' : '#1a1a2e';
+          var statusEl = document.querySelector('[data-status-for="' + date + '"]');
+          if (statusEl) {
+            statusEl.textContent = nowDenied ? 'DENIED' : 'ALLOWED';
+            statusEl.style.color = nowDenied ? '#b00020' : '#0a7d2c';
+          }
+          if (window._pendingMealChanges[date]) {
+            delete window._pendingMealChanges[date]; // toggled back to original state
+          } else {
+            window._pendingMealChanges[date] = true;
+          }
+          updateSaveMealButton();
+          return;
         }
-        if (window._pendingMealChanges[date]) {
-          delete window._pendingMealChanges[date]; // toggled back to original state
+        // The fare-claim picker toggle stays clickable in the admin view
+        // (useful to see the per-segment breakdown) even though claims
+        // themselves are view-only here (claimsInteractive: false, above) —
+        // toggleFarePicker (shared, app.js) reads data-interactive itself
+        // to decide whether an unclaimed segment gets a "+ Fare" button or
+        // plain "Not filed" text.
+        var pickerBtn = ev.target.closest('.fare-picker-btn');
+        if (pickerBtn) { toggleFarePicker(pickerBtn); return; }
+        closeAllFarePickers();
+      });
+      document.addEventListener('click', function(ev) {
+        if (!ev.target.closest('.fare-picker')) closeAllFarePickers();
+      });
+      // Shift Start/End tagging — admin can also tag/retag on an employee's
+      // behalf (product decision: not view-only), batched the same way as
+      // index.html's own "Save Shift Changes" button.
+      document.getElementById('period-sheet-output').addEventListener('change', function(ev) {
+        var sel = ev.target.closest('.shift-tag-select');
+        if (!sel) return;
+        var ts = sel.dataset.timestamp;
+        if (sel.value === sel.dataset.original) {
+          delete window._pendingShiftTags[ts];
         } else {
-          window._pendingMealChanges[date] = true;
+          window._pendingShiftTags[ts] = sel.value;
         }
-        updateSaveMealButton();
+        updateSaveShiftButtonAdmin();
       });
     });
 
@@ -895,12 +925,14 @@
       out.innerHTML = '<p>Loading…</p>';
       window._pendingMealChanges = {};
       updateSaveMealButton();
+      window._pendingShiftTags = {};
+      updateSaveShiftButtonAdmin();
 
       api('getPeriodSheet', { employee_name: emp, period_start: start, period_end: end },
         function(err, sheet) {
           if (err) { out.innerHTML = '<p style="color:red;">' + escapeHtml(err.message) + '</p>'; return; }
           window._lastPeriodSheet = sheet;
-          out.innerHTML = renderPeriodSheet(sheet, { adminControls: true });
+          out.innerHTML = renderPeriodSheet(sheet, { employeeControls: true, adminControls: true, claimsInteractive: false });
         }
       );
     }
@@ -936,11 +968,43 @@
       });
     }
 
+    function updateSaveShiftButtonAdmin() {
+      var btn = document.getElementById('save-shift-btn');
+      var count = Object.keys(window._pendingShiftTags).length;
+      btn.style.display = count ? 'inline-block' : 'none';
+      btn.textContent = '💾 Save Shift Changes (' + count + ')';
+    }
+
+    function saveShiftChangesAdmin() {
+      var timestamps = Object.keys(window._pendingShiftTags);
+      if (!timestamps.length) return;
+      // The viewed employee, NOT the logged-in admin — currentUser() would
+      // target the wrong person here, unlike index.html's own
+      // saveShiftChanges() where the viewer and the sheet's owner are
+      // always the same person.
+      var empName = window._lastPeriodSheet.employee.name;
+      var btn = document.getElementById('save-shift-btn');
+      btn.disabled = true;
+      var tags = timestamps.map(function(ts) {
+        return { timestamp: ts, role: window._pendingShiftTags[ts] };
+      });
+      api('saveShiftTags', { employee_name: empName, tags: tags }, function(err) {
+        if (err) {
+          btn.disabled = false;
+          updateSaveShiftButtonAdmin();
+          alert(err.message);
+          return;
+        }
+        window._pendingShiftTags = {};
+        generatePeriodSheet(); // refresh once, shows the saved server state + updated totals
+      });
+    }
+
     function printPeriodSheet() {
       var content = document.getElementById('printable-sheet');
       if (!content) { alert('Generate a period sheet first.'); return; }
       var w = window.open('', '_blank');
-      w.document.write('<html><head><title>Period Sheet</title>' +
+      w.document.write('<html><head><title>Employee Timesheet</title>' +
         '<style>body{font-family:Arial,sans-serif;font-size:12px;}' +
         'table{border-collapse:collapse;width:100%;}' +
         'th,td{border:1px solid #999;padding:4px 6px;}' +
