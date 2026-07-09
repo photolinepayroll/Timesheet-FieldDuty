@@ -14,6 +14,13 @@
     #emp-inline-claim { display:none; }
     .emp-claim-btn { font-size:.78em; padding:3px 9px; cursor:pointer; }
     #cl-date[disabled] { background:#f0f0f0; opacity:.85; }
+    @media (max-width: 600px) {
+      .emp-claim-btn { padding:8px 12px; font-size:.85em; }
+      #emp-inline-claim button[onclick="hideClaimForm()"] {
+        padding:8px 12px; min-width:40px; min-height:40px;
+      }
+      #employee-view { padding:8px !important; margin:12px auto !important; }
+    }
   </style>
 </head>
 <body>

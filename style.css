@@ -167,3 +167,58 @@ tr:nth-child(even) { background: #f5f5f5; }
   color: #fff;
   border-color: var(--blue2);
 }
+
+/* ---------- Mobile responsive polish (phones ~375-414px) ---------- */
+
+@media (max-width: 600px) {
+  /* Denser tables so more columns fit before horizontal scroll kicks in */
+  table { font-size: 11px; }
+  th, td { padding: 4px 5px; min-width: 40px; }
+
+  /* Persistent right-edge scroll hint on horizontally-scrollable tables */
+  .table-scroll { position: relative; }
+  .table-scroll::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 18px;
+    background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.08));
+    pointer-events: none;
+  }
+
+  /* Clamp dropdown widths to the viewport so they don't overflow off-screen */
+  .fare-picker-list, .emp-ac-list {
+    max-width: calc(100vw - 32px);
+    min-width: 0;
+  }
+
+  /* Slightly larger tap targets for small action buttons in dense tables */
+  .fare-picker-btn { padding: 8px 12px; font-size: .85em; }
+  .claim-amount-input { padding: 6px !important; width: 64px !important; }
+
+  /* Receipt photo modal: keep the close button on-screen, inside the image wrapper */
+  #receipt-modal button {
+    top: 8px !important;
+    right: 8px !important;
+    background: rgba(255, 255, 255, 0.92) !important;
+  }
+
+  /* Admin filter rows (Approve Claims / Employee Timesheet): stack full-width instead of wrapping unevenly */
+  #tab-claims > div:first-of-type,
+  #tab-periods > div:first-of-type {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #claims-employee, #ps-employee,
+  #claims-start, #claims-end,
+  #ps-start, #ps-end {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  #tab-claims > div:first-of-type > button,
+  #tab-periods > div:first-of-type > button {
+    width: 100% !important;
+  }
+}
