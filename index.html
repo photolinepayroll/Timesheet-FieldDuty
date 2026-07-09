@@ -20,12 +20,20 @@
         padding:8px 12px; min-width:40px; min-height:40px;
       }
       #employee-view { padding:8px !important; margin:12px auto !important; }
-      /* Stack the period-range row instead of letting each field wrap onto
-         its own line in an uneven order (date/dash/date/button). */
-      #period-picker-row { flex-direction: column; align-items: stretch; }
-      #period-picker-row input[type="date"],
-      #period-picker-row #btn-load { width: 100%; }
-      #period-sep { display: none; }
+      /* Period-range row: label on its own line, the two dates + dash
+         grouped on the next line, Load as a full-width button below —
+         achieved via flex-wrap + flex-basis:100% "line break" children,
+         no extra wrapper markup needed. */
+      #period-picker-row { flex-direction: row; flex-wrap: wrap; align-items: center; }
+      #period-picker-row label { flex: 1 0 100%; }
+      #period-label-desktop { display: none; }
+      #period-label-mobile { display: inline; }
+      #period-picker-row input[type="date"] { flex: 1 1 0; min-width: 0; }
+      #period-sep { flex: 0 0 auto; }
+      #period-picker-row #btn-load {
+        flex: 1 0 100%; margin-top: 8px; padding: 14px;
+        font-size: 1.15em; font-weight: 700;
+      }
       #employee-header-row h3 { font-size: 1.1em; margin: 0; }
     }
   </style>
@@ -51,7 +59,7 @@
     </div>
 
     <div id="period-picker-row" style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
-      <label style="font-weight:600;">Period: <span style="font-weight:400;font-size:.78em;color:#888;">(YYYY-MM-DD)</span></label>
+      <label style="font-weight:600;"><span id="period-label-desktop">Period: <span style="font-weight:400;font-size:.78em;color:#888;">(YYYY-MM-DD)</span></span><span id="period-label-mobile" style="display:none;">Date Covered Range</span></label>
       <input id="inp-period-start" type="date" style="padding:6px;">
       <span id="period-sep">—</span>
       <input id="inp-period-end" type="date" style="padding:6px;">
