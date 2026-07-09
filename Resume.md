@@ -192,6 +192,162 @@ multi-segment date. Full plan (with exact line references) was written to
 session's plan-mode design pass — keep for reference until the feature is
 confirmed live.
 
+**RESOLVED (2026-07-07/08 session): Employee manual Start/End Shift
+tagging + auto DAY count.** The raw GPS Log-In/Log-Out pairing for a day
+can be ambiguous (stray/orphan logs), so this lets an employee explicitly
+tag an individual raw attendance log as the `'start'` or `'end'` of a
+shift, instead of relying purely on auto first-in/last-out. New `ShiftTags`
+Sheet tab (`employee_name | timestamp | role | updated_at`, one row per
+tagged log — see `SETUP.md`). `resolveShiftDays()` (inside
+`handleGetPeriodSheet`, `Code.gs`) pairs a tagged `'start'` with the next
+tagged `'end'` that follows it chronologically into a "resolved Day"
+(`dayNumber`/`startTimestamp`/`endTimestamp`/`ownDate`), which drives that
+shift's HRS/MEAL/ACCOM/MIDNIGHT instead of the calendar-date auto-derived
+values — additive, does not touch the existing per-date `rows`/`segments`
+fields at all. `app.js`'s `renderPeriodSheet` gained a whole new
+`employeeControls` per-log flat timeline (one `<tr>` per raw attendance
+log via `sheet.logs`, not per calendar date), with a DAY column and a
+per-row Start/End/- `<select>` (`renderShiftTagSelect`). Commits `677a64b`,
+`81d815e`. Bugfix `2061b91`: an End tag on an unpadded-hour timestamp (e.g.
+"4:20 AM") wasn't resolving into a Day, because the real attendance app
+doesn't always zero-pad single-digit hours — `normalizeTimestampCell()` now
+always parses through `Date` and reformats on both sides of every
+`ShiftTags` timestamp comparison, regardless of which form the value
+arrived in. Batching follow-ups `122a298`/`437975d`: dropdown edits only
+flip state in the browser, a "💾 Save Shift Changes (N)" button batches
+them, and the backend action itself was refactored from singular
+`handleSaveShiftTag` (one Apps Script call per tag) to plural
+`handleSaveShiftTags` (one call for the whole batch) — same "batch locally,
+one write" pattern as the existing meal-deny toggle.
+
+**RESOLVED (2026-07-08 session): Column-order rendering bug + empty-column
+visual collapse, both in the per-log timeline.** Live testing surfaced two
+display bugs: (1) the table body emitted FARE CLAIM right after FARE AMT
+(both segment-level, same rowspan group) but the `<thead>` listed FARE
+CLAIM after TOTAL as if it were day-level — every column from FARE CLAIM
+onward rendered one slot left of its header (a "+ Fare" button appeared
+under the MEAL header). Fixed by reordering the header to match the body's
+actual grouping, with a matching fix to the totals row. (2) FROM/TO/MODE
+columns, often empty when a segment has no fare claim yet, visually
+collapsed to a sliver next to the wider ₱-amount columns since
+`table-layout: auto` sizes each column by its widest content — fixed with
+a `min-width: 48px` added to `style.css`'s shared `th, td` rule. Commit
+`e2dec0d`.
+
+**RESOLVED (2026-07-08 session): Per-segment fare-claim buttons merged
+into one picker per day-range.** Stacking one "+ Fare" button per raw-log
+segment made a multi-location ("roving") day look cluttered/confusing to
+users. FARE AMT/FARE CLAIM now rowspan across the same day-range as
+MEAL/ACCOM/etc — a range with exactly one segment renders identically to
+before (single button/status, no picker); a range with multiple segments
+shows one merged "Fare (x/y)" button that opens a dropdown listing each
+segment (time in/out + destination) with its own claim status or a mini
+"+ Fare" action — reuses the existing `openClaimForm`/`segment_key`
+plumbing untouched, just adds a picker layer in front of it. Removed the
+now-redundant FROM/TO/MODE table columns (that detail now only lives
+inside the picker per segment). Commit `79f16a5`.
+
+**RESOLVED (2026-07-08 session): Attendance-CSV + hot-path sheet-read
+caching, rate-lookup dedup, parallel login — several load-time perf
+fixes.** The user reported login/timesheet loading felt slow. Root cause
+#1 (the big one): `handleGetAttendance` downloaded the ENTIRE company
+attendance-history CSV over HTTP on every single `getPeriodSheet` call
+(every login, every reload), with no caching — this got slower every week
+as the log grew. Fixed via `fetchAttendanceCsv()`, caching the raw CSV in
+`CacheService.getScriptCache()` for 180s, chunked into ~90KB pieces
+(cache values cap at ~100KB) with a `_count` manifest key. Commit
+`b6328c8`. Root causes #2-5 (smaller, but all fire on every load): (a)
+`computeMidnight` re-fetched+re-sorted the small `MidnightRates` table on
+every call (up to ~30x per 15-day period) — hoisted to sort once per
+request; (b) `resolveEmployeeRate` re-scanned the FULL `EmployeeRates`
+table on every call instead of reusing the already-computed per-employee
+`candidateAreaRows` subset — threaded through `computeMeal`/`computeAccom`
+instead; (c) `handleGetPeriodSheet`'s 5 hot-path `sheetToObjects()` reads
+(Users/EmployeeRates/Claims/MealDenials/ShiftTags) were only deduped
+within a single request — added `cachedSheetToObjects(name, ttlSeconds)`
+(reusing the CSV cache's chunking helpers, generalized into
+`cacheGetChunked`/`cachePutChunked`), with a matching `cacheBustSheet()`
+call added to every write handler for those 5 sheets so an approval/
+meal-deny/shift-tag-save/user-edit/rate-edit is visible on the very next
+load, not just after the TTL expires (bust-on-write + a 20-30s TTL
+backstop, not either/or); (d) the frontend's `login` and `getConfig` calls
+ran sequentially even though `getConfig`'s payload doesn't depend on the
+login result — now fire in parallel. Commit `62aa1ff`. **Live-verified**
+via direct POST/GET calls against the deployed Web App (not just read from
+the code): the old singular `saveShiftTag` action now returns `"Unknown
+action"` (proving the live server is already past `437975d`), and three
+consecutive identical `getPeriodSheet` calls showed a 7.9s → 3.8s → 3.3s
+drop — the cache-hit signature, impossible on the old uncached code. This
+means the `Code.gs` redeploy that had been "pending" per earlier session
+notes had, in fact, already happened — that stale open issue was removed
+from `CLAUDE.md`.
+
+**REJECTED (2026-07-08 session, same investigation): compressing
+`ShiftTags` from 2 rows/shift (one `role='start'` row, one `role='end'`
+row) to 1 row/shift.** The user asked about this after looking at the live
+`ShiftTags` Sheet tab and seeing the row count, wondering if it would speed
+up saving further. Investigated and rejected: saving is already batched
+into a single write per save regardless of row count (unrelated), and
+compressing would require solving real pairing ambiguities for zero speed
+benefit — a start tagged with no end yet is a normal, long-lived, valid
+state (not an error) with no clean "half a pair" row shape; a second
+consecutive `'start'` silently abandons the first per `resolveShiftDays`'
+existing read-time rule, with no clean write-time equivalent; re-tagging
+either half of an existing pair independently (in any order, within one
+batch) has no stable single key to upsert against in a compressed schema.
+No code changed as a result of this investigation.
+
+**RESOLVED (2026-07-08 session): "Saving…" label on the shift-tag save
+button.** The button previously just silently disabled during the save
+round trip with no visual feedback, which could read as unresponsive.
+Now shows "⏳ Saving N change(s)…" for the duration of the save request,
+before the existing period-sheet reload takes over with its own loading
+placeholder. Commit `07aa3b6`.
+
+**RESOLVED (2026-07-09 session): Admin's "Period Sheets" tab redesigned
+to match the employee's per-log timesheet, renamed "Employee Timesheet".**
+Admin's tab now calls `renderPeriodSheet(sheet, { employeeControls: true,
+adminControls: true, claimsInteractive: false })` instead of the old
+`{ adminControls: true }`-only per-calendar-date layout, so admin sees the
+same flat per-log timeline (DAY numbers, per-segment itemized fare) as the
+employee's own view. Three admin-specific differences confirmed with the
+admin beforehand: (1) admin CAN also edit Start/End shift tags on an
+employee's behalf — new `#save-shift-btn`/`saveShiftChangesAdmin()` in
+`admin.html`, sourcing `employee_name` from
+`window._lastPeriodSheet.employee.name` (the loaded employee), never the
+logged-in admin; (2) the MEAL CTRL column is preserved via a new shared
+`buildMealCtrlCell()` helper in `app.js`, emitting byte-identical markup to
+the old branch so `saveMealChanges()` needed zero changes; (3) fare/accom
+claim buttons are view-only for admin (new `opts.claimsInteractive` flag,
+default `true` so `index.html` is unaffected) — an unclaimed item shows
+plain "Not filed" text instead of a `+ Fare`/`+ Accom` button, though the
+multi-segment "Fare (x/y)" picker's informational list still opens and
+shows each segment's status. The most significant change: a standalone log
+with no resolved Day (the employee hasn't tagged it) used to render
+MEAL/ACCOM/MIDNIGHT/TOTAL as blank — acceptable for the employee's own view
+(encourages tagging) but not for admin's payroll view, since many
+employees haven't adopted tagging yet — so that branch now falls back to
+the calendar-date auto-computed value from `sheet.rows` (matched by date),
+rendered per-row without new date-grouping complexity.
+`toggleFarePicker`/`closeAllFarePickers` moved from `index.html` into
+shared `app.js` (both pages need them now); the `.claim-status-badge`/
+`-approved`/`-submitted`/`-rejected` CSS moved from `index.html`'s inline
+`<style>` into shared `style.css` for the same reason. The old
+per-calendar-date/non-`employeeControls` rendering branch in
+`renderPeriodSheet` is now unreachable dead code — deliberately left in
+place as a safety net pending live verification, to be removed in a
+follow-up cleanup. Frontend-only, no `Code.gs` changes, no redeploy
+needed. Commit `2556d05`. **Not yet live-tested**: needs a real
+walkthrough (fully-tagged employee, zero-tags employee, mixed employee,
+Save Shift Changes targeting the right employee, Save Meal Changes on both
+a resolved-Day row and a fallback row, multi-segment picker view,
+print/CSV, and a regression check that `index.html`'s own view is
+unchanged) — full plan with exact line references was written to
+`C:\Users\Gilbert\.claude\plans\can-u-suggest-how-parallel-breeze.md`
+during this session's plan-mode design pass.
+
+All commits through `2556d05` pushed to both `master` and `main`.
+
 ---
 
 ## Status: app is live, expense-only (OT/UT removed), GPS-fallback area classification shipped, real per-employee rate data imported, meal-allowance incomplete-log auto-grant + admin deny override shipped, employee 3-tab self-service dashboard shipped, meal-control batching + clear status indicator shipped, receipt-photo mobile fix + admin receipt viewer/editable-claimed-amount shipped, 2026-07-03 full rate-book reimport applied live, admin Check Name Matches audit tool shipped. Ten workstreams below are DONE.
