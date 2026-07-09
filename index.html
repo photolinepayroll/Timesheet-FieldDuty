@@ -20,6 +20,13 @@
         padding:8px 12px; min-width:40px; min-height:40px;
       }
       #employee-view { padding:8px !important; margin:12px auto !important; }
+      /* Stack the period-range row instead of letting each field wrap onto
+         its own line in an uneven order (date/dash/date/button). */
+      #period-picker-row { flex-direction: column; align-items: stretch; }
+      #period-picker-row input[type="date"],
+      #period-picker-row #btn-load { width: 100%; }
+      #period-sep { display: none; }
+      #employee-header-row h3 { font-size: 1.1em; margin: 0; }
     }
   </style>
 </head>
@@ -38,15 +45,15 @@
   </div>
 
   <div id="employee-view" style="display:none;max-width:980px;margin:24px auto;padding:16px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <div id="employee-header-row" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
       <h3 id="welcome-msg"></h3>
       <button onclick="logout()">Logout</button>
     </div>
 
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+    <div id="period-picker-row" style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
       <label style="font-weight:600;">Period: <span style="font-weight:400;font-size:.78em;color:#888;">(YYYY-MM-DD)</span></label>
       <input id="inp-period-start" type="date" style="padding:6px;">
-      <span>—</span>
+      <span id="period-sep">—</span>
       <input id="inp-period-end" type="date" style="padding:6px;">
       <button id="btn-load" onclick="loadCurrentTab()" style="padding:6px 16px;">Load</button>
     </div>
