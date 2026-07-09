@@ -239,8 +239,8 @@
       // "Saving…" label for that whole stretch so it's clear something is
       // happening, not just an unresponsive button, until the fresh sheet
       // actually renders.
-      var savingLabel = '⏳ Saving ' + timestamps.length + ' change' + (timestamps.length === 1 ? '' : 's') + '…';
-      btn.textContent = savingLabel;
+      var savingLabel = 'Saving ' + timestamps.length + ' change' + (timestamps.length === 1 ? '' : 's') + '…';
+      btn.innerHTML = '<span class="pl-spinner"></span>' + escapeHtml(savingLabel);
       // One request for every pending tag — saveShiftTags (plural) applies
       // them all in a single Apps Script execution, instead of one HTTP
       // round trip per changed row.
@@ -298,7 +298,7 @@
       // success and error, so the button never gets stuck disabled).
       var btn = document.getElementById('btn-load');
       btn.disabled = true;
-      btn.textContent = 'Loading…';
+      btn.innerHTML = '<span class="pl-spinner"></span>Loading…';
       function done() {
         btn.disabled = false;
         btn.textContent = 'Load';
@@ -524,7 +524,7 @@
     // input — so an employee cannot view another employee's data.
     function loadEmployeePeriodSheet(user, config, done) {
       var out = document.getElementById('emp-period-sheet');
-      out.innerHTML = '<p>Loading your period sheet…</p>';
+      out.innerHTML = loadingSpinnerHtml('Loading your period sheet…');
       window._pendingShiftTags = {};
       updateSaveShiftButton();
       api('getPeriodSheet', {
@@ -546,7 +546,7 @@
     // ---- Expense Claims tab ----
     function loadMyClaims(user, done) {
       var out = document.getElementById('emp-claims-list');
-      out.innerHTML = '<p>Loading your claims…</p>';
+      out.innerHTML = loadingSpinnerHtml('Loading your claims…');
       api('getClaims', { employee_name: user.name }, function(err, claims) {
         if (err) {
           out.innerHTML = '<p style="color:red;">' + escapeHtml(err.message) + '</p>';
@@ -587,7 +587,7 @@
         if (done) done();
         return;
       }
-      out.innerHTML = '<p>Loading attendance…</p>';
+      out.innerHTML = loadingSpinnerHtml('Loading attendance…');
       api('getAttendance', {
         employee_name: user.name,
         period_start:  config.period_start,

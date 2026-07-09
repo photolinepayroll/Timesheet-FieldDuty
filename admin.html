@@ -146,7 +146,7 @@
           <label>Period End</label><br>
           <input id="ps-end" type="date" style="padding:7px;">
         </div>
-        <button onclick="generatePeriodSheet()" style="padding:8px 18px;">
+        <button id="btn-generate" onclick="generatePeriodSheet()" style="padding:8px 18px;">
           Generate
         </button>
         <button onclick="printPeriodSheet()" style="padding:8px 18px;">🖨 Print</button>
@@ -190,14 +190,20 @@
           // too slow for reviewing a whole sheet's rows in sequence.
           var date = mealBtn.dataset.date;
           var nowDenied = mealBtn.dataset.denied !== 'true'; // flip
-          mealBtn.dataset.denied = nowDenied;
-          mealBtn.textContent = nowDenied ? 'Allow Meal' : 'Deny Meal';
-          mealBtn.style.background = nowDenied ? '#b00020' : '#1a1a2e';
-          var statusEl = document.querySelector('[data-status-for="' + date + '"]');
-          if (statusEl) {
+          // A date with several untagged stray logs repeats the same
+          // MEAL CTRL button/status on each of its rows (see buildMealCtrlCell
+          // in app.js) — all sharing this same data-date. Update every
+          // duplicate, not just the one clicked, so they can't drift out of
+          // sync with each other.
+          document.querySelectorAll('.meal-deny-btn[data-date="' + date + '"]').forEach(function(btn) {
+            btn.dataset.denied = nowDenied;
+            btn.textContent = nowDenied ? 'Allow Meal' : 'Deny Meal';
+            btn.style.background = nowDenied ? '#b00020' : '#1a1a2e';
+          });
+          document.querySelectorAll('[data-status-for="' + date + '"]').forEach(function(statusEl) {
             statusEl.textContent = nowDenied ? 'DENIED' : 'ALLOWED';
             statusEl.style.color = nowDenied ? '#b00020' : '#0a7d2c';
-          }
+          });
           if (window._pendingMealChanges[date]) {
             delete window._pendingMealChanges[date]; // toggled back to original state
           } else {
@@ -922,14 +928,20 @@
       if (!emp || !start || !end) { alert('Select employee and period dates.'); return; }
 
       var out = document.getElementById('period-sheet-output');
-      out.innerHTML = '<p>Loading…</p>';
+      out.innerHTML = loadingSpinnerHtml('Loading employee timesheet…');
       window._pendingMealChanges = {};
       updateSaveMealButton();
       window._pendingShiftTags = {};
       updateSaveShiftButtonAdmin();
 
+      var genBtn = document.getElementById('btn-generate');
+      genBtn.disabled = true;
+      genBtn.innerHTML = '<span class="pl-spinner"></span>Generating…';
+
       api('getPeriodSheet', { employee_name: emp, period_start: start, period_end: end },
         function(err, sheet) {
+          genBtn.disabled = false;
+          genBtn.textContent = 'Generate';
           if (err) { out.innerHTML = '<p style="color:red;">' + escapeHtml(err.message) + '</p>'; return; }
           window._lastPeriodSheet = sheet;
           out.innerHTML = renderPeriodSheet(sheet, { employeeControls: true, adminControls: true, claimsInteractive: false });
@@ -951,6 +963,7 @@
       var empName = window._lastPeriodSheet.employee.name;
       var btn = document.getElementById('save-meal-btn');
       btn.disabled = true;
+      btn.innerHTML = '<span class="pl-spinner"></span>Saving ' + dates.length + ' change' + (dates.length === 1 ? '' : 's') + '…';
       var remaining = dates.length;
       var errors = [];
       dates.forEach(function(date) {
@@ -960,6 +973,7 @@
             remaining--;
             if (remaining === 0) {
               btn.disabled = false;
+              btn.textContent = '💾 Save Meal Changes';
               if (errors.length) alert('Some meal changes failed to save:\n' + errors.join('\n'));
               generatePeriodSheet(); // refresh once, shows the saved server state + updated totals
             }
@@ -985,6 +999,7 @@
       var empName = window._lastPeriodSheet.employee.name;
       var btn = document.getElementById('save-shift-btn');
       btn.disabled = true;
+      btn.innerHTML = '<span class="pl-spinner"></span>Saving ' + timestamps.length + ' change' + (timestamps.length === 1 ? '' : 's') + '…';
       var tags = timestamps.map(function(ts) {
         return { timestamp: ts, role: window._pendingShiftTags[ts] };
       });
@@ -996,6 +1011,7 @@
           return;
         }
         window._pendingShiftTags = {};
+        btn.textContent = '💾 Save Shift Changes';
         generatePeriodSheet(); // refresh once, shows the saved server state + updated totals
       });
     }

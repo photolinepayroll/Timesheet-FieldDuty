@@ -102,6 +102,15 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+// Shared centered loading placeholder (spinner + text) for content areas
+// that get replaced while a fetch is in flight — used by both pages instead
+// of each repeating the same markup for the period sheet / claims list /
+// attendance list / etc.
+function loadingSpinnerHtml(text) {
+  return '<div style="text-align:center;padding:24px 0;color:#666;">' +
+    '<div class="pl-spinner-lg"></div>' + escapeHtml(text) + '</div>';
+}
+
 // ---- Period Sheet rendering ----
 // Per-row SHIFT tag <select> (employeeControls only) — the employee tags an
 // individual raw log as the Start or End of a shift; resolveShiftDays()
