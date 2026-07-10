@@ -626,73 +626,95 @@ function sanitizePrintableClone(content) {
   return clone;
 }
 
-// Wraps the sanitized clone with the PHOTOLINE letterhead + signature
-// footer. Uses display:inline-block so the wrapper shrinks to the table's
-// true rendered width (measured in printPeriodSheet below for page-fit).
-//
-// IMPORTANT: the caller must attach this inside a zero-size
-// overflow:hidden container at REAL positive page coordinates (not a
-// left:-9999px offset) — html2canvas paints relative to real page
-// coordinates, so a hugely negative offset renders a BLANK canvas of the
-// right size; a zero-size clipping ancestor hides it without moving it.
-function buildPrintableWrapper(sheet, content) {
-  var clone = sanitizePrintableClone(content);
-  var wrapper = document.createElement('div');
-  wrapper.style.cssText = 'position:absolute;top:0;left:0;display:inline-block;background:#fff;' +
-    'font-family:Arial,sans-serif;font-size:11px;color:#1a1a2e;padding:12px;';
-  wrapper.innerHTML =
-    '<div style="width:100%;text-align:center;margin-bottom:10px;">' +
-      '<div style="font-size:20px;font-weight:bold;letter-spacing:1px;">PHOTOLINE</div>' +
-      '<div style="font-size:15px;margin-top:2px;">Employee Timesheet</div>' +
-      '<div style="font-size:12px;color:#444;margin-top:2px;">Period: ' + escapeHtml(sheet.period_start) + ' — ' + escapeHtml(sheet.period_end) + '</div>' +
-      '<hr style="border:none;border-top:2px solid #1a1a2e;margin-top:10px;">' +
-    '</div>';
-  wrapper.appendChild(clone);
-  wrapper.insertAdjacentHTML('beforeend',
-    '<div style="width:100%;display:flex;justify-content:space-between;margin-top:60px;">' +
-      '<div style="width:30%;text-align:center;font-size:12px;"><div style="border-top:1px solid #1a1a2e;margin-bottom:6px;">&nbsp;</div>Prepared by</div>' +
-      '<div style="width:30%;text-align:center;font-size:12px;"><div style="border-top:1px solid #1a1a2e;margin-bottom:6px;">&nbsp;</div>Checked by</div>' +
-      '<div style="width:30%;text-align:center;font-size:12px;"><div style="border-top:1px solid #1a1a2e;margin-bottom:6px;">&nbsp;</div>Approved by</div>' +
-    '</div>'
-  );
-  return wrapper;
+// jsPDF's built-in standard fonts (Helvetica/Times/Courier) don't include a
+// glyph for the Philippine Peso sign (U+20B1) -- rendering it (whether via
+// html2canvas screenshotting OR jsPDF's own vector text) produces a
+// corrupted/substituted character. Swaps it for a plain "P" in a clone's
+// text nodes, used for the PDF path only -- Excel keeps the real ₱ symbol
+// since SheetJS/Excel display Unicode text correctly, no font-glyph issue.
+function stripPesoSignForPdf(root) {
+  var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+  var node;
+  while ((node = walker.nextNode())) {
+    if (node.nodeValue.indexOf('₱') !== -1) node.nodeValue = node.nodeValue.replace(/₱/g, 'P');
+  }
 }
 
 // Previews a landscape PDF in a new tab (browser's native PDF viewer, which
-// provides its own download/print controls). Fits any width by measuring
-// the table's real scrollWidth and letting jsPDF scale that whole width
-// down to the A4-landscape usable width — no guessed fixed dimensions.
+// provides its own download/print controls). Built with jsPDF-AutoTable
+// (real vector text drawn from the sanitized table's DOM structure via its
+// `html:` option, which respects rowspan/colspan) rather than html2canvas
+// screenshotting -- a wide 13+ column timeline forced into one page width
+// via image scaling became too small to read and showed font/rowspan
+// rendering glitches; AutoTable auto-sizes columns/font and paginates
+// instead of shrinking everything to fit.
 function printPeriodSheet(btnEl) {
   var content = document.getElementById('printable-sheet');
   var sheet = window._lastPeriodSheet;
   if (!content || !sheet) { alert('Load/Generate a timesheet first.'); return; }
-  var wrapper = buildPrintableWrapper(sheet, content);
-  var hider = document.createElement('div');
-  hider.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;';
-  hider.appendChild(wrapper);
-  document.body.appendChild(hider);
   var origLabel = btnEl ? btnEl.textContent : '';
   if (btnEl) {
     btnEl.disabled = true;
     btnEl.innerHTML = '<span class="pl-spinner"></span>Generating PDF…';
   }
-  var table = wrapper.querySelector('table');
-  var renderWidth = (table ? table.scrollWidth : wrapper.scrollWidth) + 24; // + wrapper's 12px L/R padding
+
+  var clone = sanitizePrintableClone(content);
+  stripPesoSignForPdf(clone);
+  var hider = document.createElement('div');
+  hider.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;';
+  hider.appendChild(clone);
+  document.body.appendChild(hider);
+
+  var table = clone.querySelector('table');
+  if (!table) {
+    document.body.removeChild(hider);
+    alert('Nothing to print.');
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = origLabel; }
+    return;
+  }
+
   var doc = new jspdf.jsPDF('l', 'pt', 'a4'); // landscape — the timesheet has 12+ columns
-  doc.html(wrapper, {
-    x: 20,
-    y: 20,
-    width: 802,               // A4 landscape usable width (842pt - 2*20 margins)
-    windowWidth: renderWidth, // real content width; jsPDF scales it down to `width`, so it always fits
-    callback: function(pdf) {
-      document.body.removeChild(hider);
-      window.open(pdf.output('bloburl'), '_blank');
-      if (btnEl) {
-        btnEl.disabled = false;
-        btnEl.textContent = origLabel || '🖨 Print (PDF)';
-      }
-    }
+  var pageWidth = doc.internal.pageSize.getWidth();
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text('PHOTOLINE', pageWidth / 2, 30, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
+  doc.text('Employee Timesheet', pageWidth / 2, 46, { align: 'center' });
+  doc.setFontSize(9);
+  doc.text('Period: ' + sheet.period_start + ' - ' + sheet.period_end, pageWidth / 2, 60, { align: 'center' });
+
+  doc.autoTable({
+    html: table,
+    startY: 72,
+    theme: 'grid',
+    styles: { fontSize: 7, cellPadding: 3, overflow: 'linebreak' },
+    headStyles: { fillColor: [26, 26, 46], textColor: 255, fontStyle: 'bold' },
+    margin: { left: 20, right: 20, top: 72 }
   });
+
+  var pageHeight = doc.internal.pageSize.getHeight();
+  var finalY = (doc.lastAutoTable ? doc.lastAutoTable.finalY : 72) + 50;
+  if (finalY + 20 > pageHeight - 20) { // table ended too close to the bottom — give the signatures their own page
+    doc.addPage();
+    finalY = 40;
+  }
+  var sigWidth = 140;
+  var positions = [40, pageWidth / 2 - sigWidth / 2, pageWidth - 40 - sigWidth];
+  var labels = ['Prepared by', 'Checked by', 'Approved by'];
+  positions.forEach(function(x, i) {
+    doc.line(x, finalY, x + sigWidth, finalY);
+    doc.setFontSize(9);
+    doc.text(labels[i], x + sigWidth / 2, finalY + 12, { align: 'center' });
+  });
+
+  document.body.removeChild(hider);
+  window.open(doc.output('bloburl'), '_blank');
+  if (btnEl) {
+    btnEl.disabled = false;
+    btnEl.textContent = origLabel || '🖨 Print (PDF)';
+  }
 }
 
 // Exports the SAME detailed timeline the PDF shows as an .xlsx — the
