@@ -149,8 +149,8 @@
         <button id="btn-generate" onclick="generatePeriodSheet()" style="padding:8px 18px;">
           Generate
         </button>
-        <button onclick="printPeriodSheet()" style="padding:8px 18px;">🖨 Print</button>
-        <button onclick="exportPeriodCSV(window._lastPeriodSheet)" style="padding:8px 18px;">⬇ Export CSV</button>
+        <button id="btn-print" onclick="printPeriodSheet()" style="padding:8px 18px;">🖨 Print (PDF)</button>
+        <button onclick="exportPeriodCSV(window._lastPeriodSheet)" style="padding:8px 18px;">⬇ Export Excel</button>
         <button id="save-meal-btn" onclick="saveMealChanges()" style="padding:8px 18px;display:none;">💾 Save Meal Changes</button>
         <button id="save-shift-btn" onclick="saveShiftChangesAdmin()" style="padding:8px 18px;display:none;">💾 Save Shift Changes</button>
       </div>
@@ -170,6 +170,15 @@
     </div>
   </div>
 
+  <!-- PDF export (Print button) and Excel export (Export button) — the
+       app's first external libraries, loaded from CDN. Both are used
+       client-side only, no build step: html2canvas + jsPDF render the same
+       letterhead/table/signature HTML used for printing into a downloadable
+       .pdf; SheetJS (xlsx) converts the timesheet rows into a downloadable
+       .xlsx workbook. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="app.js"></script>
   <script>
     // Guard — redirect to login if not a head
@@ -1068,64 +1077,66 @@
       });
     }
 
+    // Builds the same letterhead + timesheet table + signature-lines markup
+    // used on screen, as an off-screen (but still document-attached, so the
+    // shared style.css table rules still apply) wrapper — reused as the
+    // source html2canvas/jsPDF renders into the downloaded PDF below.
+    function buildPrintableWrapper(sheet, content) {
+      var clone = content.cloneNode(true);
+      clone.removeAttribute('id'); // avoid a duplicate #printable-sheet while this is attached
+      var wrapper = document.createElement('div');
+      wrapper.style.cssText = 'position:fixed;left:-9999px;top:0;width:780px;background:#fff;' +
+        'font-family:Arial,sans-serif;font-size:11px;color:#1a1a2e;padding:12px;';
+      wrapper.innerHTML =
+        '<div style="text-align:center;margin-bottom:10px;">' +
+          '<div style="font-size:20px;font-weight:bold;letter-spacing:1px;">PHOTOLINE</div>' +
+          '<div style="font-size:15px;margin-top:2px;">Employee Timesheet</div>' +
+          '<div style="font-size:12px;color:#444;margin-top:2px;">Period: ' + escapeHtml(sheet.period_start) + ' — ' + escapeHtml(sheet.period_end) + '</div>' +
+          '<hr style="border:none;border-top:2px solid #1a1a2e;margin-top:10px;">' +
+        '</div>';
+      wrapper.appendChild(clone);
+      wrapper.insertAdjacentHTML('beforeend',
+        '<div style="display:flex;justify-content:space-between;margin-top:60px;">' +
+          '<div style="width:30%;text-align:center;font-size:12px;"><div style="border-top:1px solid #1a1a2e;margin-bottom:6px;">&nbsp;</div>Prepared by</div>' +
+          '<div style="width:30%;text-align:center;font-size:12px;"><div style="border-top:1px solid #1a1a2e;margin-bottom:6px;">&nbsp;</div>Checked by</div>' +
+          '<div style="width:30%;text-align:center;font-size:12px;"><div style="border-top:1px solid #1a1a2e;margin-bottom:6px;">&nbsp;</div>Approved by</div>' +
+        '</div>'
+      );
+      return wrapper;
+    }
+
+    // "Print" previews a formatted PDF in a new tab (no browser print
+    // dialog, no immediate force-download) — html2canvas + jsPDF (loaded
+    // via CDN, see <head>) render the same letterhead/table/signature
+    // layout used for the on-screen preview. The browser's own native PDF
+    // viewer provides its own download/print controls from there.
     function printPeriodSheet() {
       var content = document.getElementById('printable-sheet');
       var sheet = window._lastPeriodSheet;
       if (!content || !sheet) { alert('Generate a period sheet first.'); return; }
-      var w = window.open('', '_blank');
-      w.document.write('<html><head><title>Employee Timesheet</title>' +
-        '<style>' +
-          '@page { margin: 1.5cm; }' +
-          'body{font-family:Arial,sans-serif;font-size:13px;color:#1a1a2e;}' +
-          '.print-header{text-align:center;margin-bottom:10px;}' +
-          '.print-company{font-size:20px;font-weight:bold;letter-spacing:1px;}' +
-          '.print-title{font-size:15px;margin-top:2px;}' +
-          '.print-period{font-size:12px;color:#444;margin-top:2px;}' +
-          '.print-header hr{border:none;border-top:2px solid #1a1a2e;margin-top:10px;}' +
-          'table{border-collapse:collapse;width:100%;}' +
-          'thead{display:table-header-group;}' +
-          'tr{page-break-inside:avoid;}' +
-          'th,td{border:1px solid #999;padding:4px 6px;}' +
-          'th{background:#1a1a2e;color:#fff;}' +
-          '.print-signatures{display:flex;justify-content:space-between;margin-top:60px;page-break-inside:avoid;}' +
-          '.sig-block{width:30%;text-align:center;font-size:12px;}' +
-          '.sig-line{border-top:1px solid #1a1a2e;margin-bottom:6px;}' +
-        '</style></head><body>');
-      w.document.write(
-        '<div class="print-header">' +
-          '<div class="print-company">PHOTOLINE</div>' +
-          '<div class="print-title">Employee Timesheet</div>' +
-          '<div class="print-period">Period: ' + escapeHtml(sheet.period_start) + ' — ' + escapeHtml(sheet.period_end) + '</div>' +
-          '<hr>' +
-        '</div>'
-      );
-      w.document.write(content.outerHTML);
-      w.document.write(
-        '<div class="print-signatures">' +
-          '<div class="sig-block"><div class="sig-line">&nbsp;</div>Prepared by</div>' +
-          '<div class="sig-block"><div class="sig-line">&nbsp;</div>Checked by</div>' +
-          '<div class="sig-block"><div class="sig-line">&nbsp;</div>Approved by</div>' +
-        '</div>'
-      );
-      w.document.write('</body></html>');
-      w.document.close();
-      w.print();
+      var wrapper = buildPrintableWrapper(sheet, content);
+      document.body.appendChild(wrapper);
+      var btn = document.getElementById('btn-print');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="pl-spinner"></span>Generating PDF…';
+      var doc = new jspdf.jsPDF('p', 'pt', 'a4');
+      doc.html(wrapper, {
+        x: 20,
+        y: 20,
+        width: 555,       // A4 width (595pt) minus left/right margins
+        windowWidth: 780, // matches wrapper's off-screen render width
+        callback: function(pdf) {
+          document.body.removeChild(wrapper);
+          window.open(pdf.output('bloburl'), '_blank');
+          btn.disabled = false;
+          btn.textContent = '🖨 Print (PDF)';
+        }
+      });
     }
 
-    // Quotes a single CSV field per standard CSV rules: if the value
-    // (stringified) contains a comma, double-quote, or newline, wrap it in
-    // double quotes and double any embedded double-quotes. Otherwise return
-    // the raw string unchanged. Applied uniformly to every field below —
-    // not just the known-risky free-text ones (e.g. branch) — since any
-    // field could in principle contain a comma/quote/newline.
-    function csvField(v) {
-      var s = (v === null || v === undefined) ? '' : String(v);
-      if (/[",\n]/.test(s)) {
-        return '"' + s.replace(/"/g, '""') + '"';
-      }
-      return s;
-    }
-
+    // "Export" downloads an Excel (.xlsx) workbook of the timesheet rows —
+    // SheetJS (loaded via CDN, see <head>) replaces the previous raw-CSV
+    // export.
     function exportPeriodCSV(sheet) {
       if (!sheet) { alert('Generate a period sheet first.'); return; }
       var headers = ['Date','Branch','IN','OUT','Hours',
@@ -1135,14 +1146,10 @@
                 r.auto_fare, r.special_fare, r.total_fare,
                 r.meal, r.accom, r.midnight, r.total_allowance];
       });
-      var csv = [headers].concat(rows).map(function(r) {
-        return r.map(csvField).join(',');
-      }).join('\n');
-      var blob = new Blob([csv], { type: 'text/csv' });
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = sheet.employee.name + '_' + sheet.period_start + '.csv';
-      a.click();
+      var ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Timesheet');
+      XLSX.writeFile(wb, sheet.employee.name + '_' + sheet.period_start + '.xlsx');
     }
   </script>
 </body>
