@@ -348,6 +348,115 @@ during this session's plan-mode design pass.
 
 All commits through `2556d05` pushed to both `master` and `main`.
 
+**RESOLVED (2026-07-09, later session): Mobile-responsive CSS pass + real
+reload/UX bugs on `index.html`.** The app had zero `@media` queries
+anywhere before this. Four commits: `d1d9d33` added a single
+`@media (max-width: 600px)` block to `style.css` (denser table font/
+padding, a right-edge scroll-fade hint on `.table-scroll`, viewport-clamped
+`.fare-picker-list`/`.emp-ac-list` dropdowns, bumped touch targets,
+repositioned the receipt-modal close button) — all additive, desktop
+provably unaffected above 600px. `e868f2c` fixed a real bug: refreshing
+`index.html` always bounced to the login screen even though `sessionStorage`
+survives a same-tab reload, because the login-view→employee-view swap only
+ever ran inside the login button's success handler — `DOMContentLoaded` now
+checks `currentUser()` on load and restores the dashboard (or redirects a
+head-role user to `admin.html`) without auto-fetching data; also added a
+"Loading…" disabled state to the Load button and a `(YYYY-MM-DD)` format
+hint. `a672445`/`ce873fe` iterated the mobile period-picker row twice based
+on user feedback/a mockup screenshot, landing on: label on its own line →
+the two date inputs side-by-side → a large full-width bold Load button
+below (mobile-only, via `flex-wrap`+`flex-basis:100%` "line-break"
+children — desktop unchanged).
+
+**RESOLVED (2026-07-09, later session): Meal-deny duplicate-row desync bug
+in `admin.html`.** A date with several untagged raw attendance logs
+intentionally repeats one MEAL CTRL button/status pair per row (documented
+tradeoff in `buildMealCtrlCell`), so multiple DOM elements share the same
+`data-date`. The click handler updated the clicked button correctly but
+looked up its paired status span via `document.querySelector` (first match
+only), so toggling one row could silently update a *different* row's status
+text. Fixed by switching both lookups to `querySelectorAll`. Commit
+`9f67075` (bundled with the loading-spinner work below).
+
+**RESOLVED (2026-07-09, later session): Loading-spinner animations on
+Generate/Save/Load buttons + content areas.** The app had zero CSS
+animation anywhere before this. Added shared `@keyframes pl-spin`/
+`.pl-spinner`/`.pl-spinner-lg` to `style.css`, plus a `button:disabled`
+dimmed style (didn't exist), and a shared `loadingSpinnerHtml(text)`
+helper in `app.js`. Applied to Generate, both pages' Save Shift Changes,
+admin's Save Meal Changes, employee's Load, and the four plain-text
+"Loading…" content placeholders. Commit `9f67075`.
+
+**RESOLVED (2026-07-10): Employees tab — delete user (inactive-only) +
+Active/Inactive grouping; formal printable Employee Timesheet report (v1);
+more loading spinners.** Commit `4e74af0`. `Code.gs` gained
+`handleDeleteUser` (removes a `Users` row by `id`, registered as the
+`deleteUser` action) — **needs the usual manual Apps Script redeploy**.
+`admin.html`'s `loadUsers()` groups rows under "Active Employees (N)"/
+"Inactive Employees (N)" divider rows; each row's Delete button is
+disabled until that employee is set Inactive (confirmed product decision —
+a safety rail against deleting an active employee), enabled Delete shows a
+`confirm()` warning before calling `deleteUser`. Deleting only removes the
+`Users` row (login record) — historical `Claims`/`EmployeeRates` rows are
+untouched (keyed by name). Also added a first-pass formal print report
+(letterhead + signature lines + print CSS) to `printPeriodSheet()` — this
+was superseded entirely by the PDF/Excel rework below, not just patched.
+Extended loading spinners to Check Name Matches, Employees/Rate Tables tab
+loads, the employee form's Save button, and Rate Tables' "Save All".
+
+**RESOLVED (2026-07-10, same session): PDF preview + Excel export, on BOTH
+`admin.html` and `index.html` — three iterations, the middle one replaced
+rather than patched.** The admin asked where the Print button's report
+lived (expecting something editable/Crystal-Reports-like) and asked for
+Print → PDF, Export → Excel, matching designs, plus the same feature added
+to the employee side.
+1. **`b8ec2b7`** — first version: added the app's first external libraries
+   (`html2canvas`, `jsPDF`, `SheetJS`, all CDN, client-side only, no build
+   step). "Print" cloned `#printable-sheet` off-screen and used
+   `html2canvas`+`jsPDF.html()` to preview a PDF in a new tab; "Export CSV"
+   became "Export Excel" via `XLSX.utils.aoa_to_sheet`. **Live-tested and
+   found broken: the PDF rendered completely blank.**
+2. **`a087f40`** — root-caused the blank PDF to `position:fixed;
+   left:-9999px` (`html2canvas` paints relative to real page coordinates,
+   so a hugely negative offset draws outside the allocated canvas — right
+   size, zero pixels); fixed via a zero-size `overflow:hidden` container
+   holding the wrapper at real `position:absolute; top:0; left:0`
+   coordinates. Also added `sanitizePrintableClone()` (replaces every live
+   `<select>`/`<button>`/`<input>` — shift-tag dropdown, meal-deny,
+   fare-picker, +Fare/+Accom — with plain text, since `html2canvas` renders
+   native form controls unreliably), moved the print/export code into
+   shared `app.js` so `index.html` got the same buttons (previously
+   admin-only), and made the PDF landscape with a dynamically-measured
+   render width. **Live-tested again: still broken** — the ₱ sign rendered
+   as a corrupted "±", and cells looked cramped/overlapping.
+3. **Third pass (this session, uncommitted as of this doc update)** —
+   recognized this as an architecture problem, not a 3rd unrelated bug:
+   forcing a 13-column detailed timeline into one page width via
+   image-scaling forced text small enough to glitch, and jsPDF's built-in
+   fonts have no ₱ glyph either (canvas or vector). **Rewrote
+   `printPeriodSheet()` to stop using `html2canvas` entirely** — now uses
+   `doc.autoTable({ html: table, ... })` (jsPDF-AutoTable, a new CDN
+   library) to draw the sanitized table as real vector text, auto-sizing
+   columns/font and paginating instead of shrinking to fit; letterhead and
+   signature lines are drawn via `doc.text()`/`doc.line()`; added
+   `stripPesoSignForPdf()` (₱→"P" for the PDF path only — Excel keeps the
+   real symbol, SheetJS renders Unicode fine) and a page-overflow check so
+   signatures get their own page if the table ends near the bottom.
+   `exportPeriodExcel()` unchanged this round — still builds from the same
+   sanitized table via `XLSX.utils.sheet_add_dom` (honors rowspan/colspan
+   as merges), so Excel and PDF show identical detailed per-log data.
+   **Not yet live-tested** — this was the version about to be tested when
+   this doc was updated; confirm both a short and long period render fully
+   legible/on-page in the PDF, and Excel still matches.
+
+**Lesson from this saga**: when a `html2canvas`/DOM-screenshot approach
+keeps producing a *new, different* rendering bug on each fix (blank →
+garbled controls → font/glyph corruption), that's the systematic-debugging
+"3+ fixes, question the architecture" signal — the screenshot approach
+itself doesn't scale to a wide, detailed table, and switching to a
+purpose-built tool (jsPDF-AutoTable, draws real text from data) eliminated
+the whole bug class at once instead of patching each symptom.
+
 ---
 
 ## Status: app is live, expense-only (OT/UT removed), GPS-fallback area classification shipped, real per-employee rate data imported, meal-allowance incomplete-log auto-grant + admin deny override shipped, employee 3-tab self-service dashboard shipped, meal-control batching + clear status indicator shipped, receipt-photo mobile fix + admin receipt viewer/editable-claimed-amount shipped, 2026-07-03 full rate-book reimport applied live, admin Check Name Matches audit tool shipped. Ten workstreams below are DONE.
