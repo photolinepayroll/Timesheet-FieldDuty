@@ -589,3 +589,161 @@ function groupAttendanceByDay(records) {
   });
   return days;
 }
+
+// ============================================================
+// PRINT (PDF) + EXPORT (Excel) — shared by admin.html and index.html
+// ============================================================
+// Both depend on the CDN globals html2canvas / jspdf / XLSX, so any page
+// that calls these must include those three <script> tags (see each page's
+// <head>). Both read the currently-rendered #printable-sheet + the loaded
+// window._lastPeriodSheet, so the same detailed timeline drives BOTH
+// outputs — guaranteeing the PDF and the Excel show identical data.
+
+// Deep-clones #printable-sheet and replaces every live form control
+// (<select> shift-tag dropdown, <button> meal-deny / fare-picker /
+// +Fare/+Accom, any <input>) with a plain <span> of its currently-visible
+// text. html2canvas renders native form controls unreliably (garbled
+// cells), and a fully-static table is also what SheetJS needs to read a
+// clean value out of every cell — so this single sanitize feeds both the
+// PDF and the Excel export.
+function sanitizePrintableClone(content) {
+  var clone = content.cloneNode(true);
+  clone.removeAttribute('id'); // avoid a duplicate #printable-sheet id while attached
+  var controls = clone.querySelectorAll('select, button, input');
+  Array.prototype.forEach.call(controls, function(el) {
+    var text;
+    if (el.tagName === 'SELECT') {
+      text = (el.selectedIndex >= 0 && el.options[el.selectedIndex]) ? el.options[el.selectedIndex].text : '';
+    } else if (el.tagName === 'INPUT') {
+      text = el.value || '';
+    } else {
+      text = el.textContent || '';
+    }
+    var span = document.createElement('span');
+    span.textContent = text;
+    if (el.parentNode) el.parentNode.replaceChild(span, el);
+  });
+  return clone;
+}
+
+// Wraps the sanitized clone with the PHOTOLINE letterhead + signature
+// footer. Uses display:inline-block so the wrapper shrinks to the table's
+// true rendered width (measured in printPeriodSheet below for page-fit).
+//
+// IMPORTANT: the caller must attach this inside a zero-size
+// overflow:hidden container at REAL positive page coordinates (not a
+// left:-9999px offset) — html2canvas paints relative to real page
+// coordinates, so a hugely negative offset renders a BLANK canvas of the
+// right size; a zero-size clipping ancestor hides it without moving it.
+function buildPrintableWrapper(sheet, content) {
+  var clone = sanitizePrintableClone(content);
+  var wrapper = document.createElement('div');
+  wrapper.style.cssText = 'position:absolute;top:0;left:0;display:inline-block;background:#fff;' +
+    'font-family:Arial,sans-serif;font-size:11px;color:#1a1a2e;padding:12px;';
+  wrapper.innerHTML =
+    '<div style="width:100%;text-align:center;margin-bottom:10px;">' +
+      '<div style="font-size:20px;font-weight:bold;letter-spacing:1px;">PHOTOLINE</div>' +
+      '<div style="font-size:15px;margin-top:2px;">Employee Timesheet</div>' +
+      '<div style="font-size:12px;color:#444;margin-top:2px;">Period: ' + escapeHtml(sheet.period_start) + ' — ' + escapeHtml(sheet.period_end) + '</div>' +
+      '<hr style="border:none;border-top:2px solid #1a1a2e;margin-top:10px;">' +
+    '</div>';
+  wrapper.appendChild(clone);
+  wrapper.insertAdjacentHTML('beforeend',
+    '<div style="width:100%;display:flex;justify-content:space-between;margin-top:60px;">' +
+      '<div style="width:30%;text-align:center;font-size:12px;"><div style="border-top:1px solid #1a1a2e;margin-bottom:6px;">&nbsp;</div>Prepared by</div>' +
+      '<div style="width:30%;text-align:center;font-size:12px;"><div style="border-top:1px solid #1a1a2e;margin-bottom:6px;">&nbsp;</div>Checked by</div>' +
+      '<div style="width:30%;text-align:center;font-size:12px;"><div style="border-top:1px solid #1a1a2e;margin-bottom:6px;">&nbsp;</div>Approved by</div>' +
+    '</div>'
+  );
+  return wrapper;
+}
+
+// Previews a landscape PDF in a new tab (browser's native PDF viewer, which
+// provides its own download/print controls). Fits any width by measuring
+// the table's real scrollWidth and letting jsPDF scale that whole width
+// down to the A4-landscape usable width — no guessed fixed dimensions.
+function printPeriodSheet(btnEl) {
+  var content = document.getElementById('printable-sheet');
+  var sheet = window._lastPeriodSheet;
+  if (!content || !sheet) { alert('Load/Generate a timesheet first.'); return; }
+  var wrapper = buildPrintableWrapper(sheet, content);
+  var hider = document.createElement('div');
+  hider.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;';
+  hider.appendChild(wrapper);
+  document.body.appendChild(hider);
+  var origLabel = btnEl ? btnEl.textContent : '';
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.innerHTML = '<span class="pl-spinner"></span>Generating PDF…';
+  }
+  var table = wrapper.querySelector('table');
+  var renderWidth = (table ? table.scrollWidth : wrapper.scrollWidth) + 24; // + wrapper's 12px L/R padding
+  var doc = new jspdf.jsPDF('l', 'pt', 'a4'); // landscape — the timesheet has 12+ columns
+  doc.html(wrapper, {
+    x: 20,
+    y: 20,
+    width: 802,               // A4 landscape usable width (842pt - 2*20 margins)
+    windowWidth: renderWidth, // real content width; jsPDF scales it down to `width`, so it always fits
+    callback: function(pdf) {
+      document.body.removeChild(hider);
+      window.open(pdf.output('bloburl'), '_blank');
+      if (btnEl) {
+        btnEl.disabled = false;
+        btnEl.textContent = origLabel || '🖨 Print (PDF)';
+      }
+    }
+  });
+}
+
+// Exports the SAME detailed timeline the PDF shows as an .xlsx — the
+// letterhead + employee-info rows, then the sanitized #printable-sheet
+// <table> converted via SheetJS's sheet_add_dom (which honors rowspan/
+// colspan as cell merges, matching the on-screen/PDF grouping), then the
+// signature footer. Note: the free SheetJS build has no bold/border
+// styling — text content matches the PDF; visual styling is best-effort.
+function exportPeriodExcel(btnEl) {
+  var content = document.getElementById('printable-sheet');
+  var sheet = window._lastPeriodSheet;
+  if (!content || !sheet) { alert('Load/Generate a timesheet first.'); return; }
+  var clone = sanitizePrintableClone(content);
+  // sheet_add_dom reads innerText, which is only populated for in-document
+  // (rendered) nodes — attach the clone inside a zero-size hider first, or
+  // every cell would export blank.
+  var hider = document.createElement('div');
+  hider.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;';
+  hider.appendChild(clone);
+  document.body.appendChild(hider);
+  try {
+    var table = clone.querySelector('table');
+    if (!table) { alert('Nothing to export.'); return; }
+
+    var e = sheet.employee || {};
+    var daysWorked = (sheet.days || []).length;
+    var totalHours = 0;
+    (sheet.days || []).forEach(function(d) { totalHours += (d.hours_worked || 0); });
+
+    var head = [
+      ['PHOTOLINE'],
+      ['Employee Timesheet'],
+      ['Period: ' + (sheet.period_start || '') + ' — ' + (sheet.period_end || '')],
+      [],
+      ['NAME:', e.name || '', '', 'PERIOD:', (sheet.period_start || '') + ' — ' + (sheet.period_end || '')],
+      ['POSITION:', e.position_level || '', '', 'MOTHER BRANCH:', e.mother_branch || ''],
+      ['DEPT:', e.department || '', '', 'DAYS WORKED:', daysWorked, 'TOTAL HOURS:', totalHours.toFixed(1)],
+      []
+    ];
+
+    var ws = XLSX.utils.aoa_to_sheet(head);
+    XLSX.utils.sheet_add_dom(ws, table, { origin: -1 }); // detailed timeline table, below the header
+    XLSX.utils.sheet_add_aoa(ws, [
+      [],
+      ['Prepared by: ____________________', '', '', 'Checked by: ____________________', '', '', 'Approved by: ____________________']
+    ], { origin: -1 });
+
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Timesheet');
+    XLSX.writeFile(wb, (e.name || 'timesheet') + '_' + (sheet.period_start || '') + '.xlsx');
+  } finally {
+    document.body.removeChild(hider);
+  }
+}

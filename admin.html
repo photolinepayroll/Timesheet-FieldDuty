@@ -149,8 +149,8 @@
         <button id="btn-generate" onclick="generatePeriodSheet()" style="padding:8px 18px;">
           Generate
         </button>
-        <button id="btn-print" onclick="printPeriodSheet()" style="padding:8px 18px;">🖨 Print (PDF)</button>
-        <button onclick="exportPeriodCSV(window._lastPeriodSheet)" style="padding:8px 18px;">⬇ Export Excel</button>
+        <button onclick="printPeriodSheet(this)" style="padding:8px 18px;">🖨 Print (PDF)</button>
+        <button onclick="exportPeriodExcel(this)" style="padding:8px 18px;">⬇ Export Excel</button>
         <button id="save-meal-btn" onclick="saveMealChanges()" style="padding:8px 18px;display:none;">💾 Save Meal Changes</button>
         <button id="save-shift-btn" onclick="saveShiftChangesAdmin()" style="padding:8px 18px;display:none;">💾 Save Shift Changes</button>
       </div>
@@ -1077,80 +1077,9 @@
       });
     }
 
-    // Builds the same letterhead + timesheet table + signature-lines markup
-    // used on screen, as an off-screen (but still document-attached, so the
-    // shared style.css table rules still apply) wrapper — reused as the
-    // source html2canvas/jsPDF renders into the downloaded PDF below.
-    function buildPrintableWrapper(sheet, content) {
-      var clone = content.cloneNode(true);
-      clone.removeAttribute('id'); // avoid a duplicate #printable-sheet while this is attached
-      var wrapper = document.createElement('div');
-      wrapper.style.cssText = 'position:fixed;left:-9999px;top:0;width:780px;background:#fff;' +
-        'font-family:Arial,sans-serif;font-size:11px;color:#1a1a2e;padding:12px;';
-      wrapper.innerHTML =
-        '<div style="text-align:center;margin-bottom:10px;">' +
-          '<div style="font-size:20px;font-weight:bold;letter-spacing:1px;">PHOTOLINE</div>' +
-          '<div style="font-size:15px;margin-top:2px;">Employee Timesheet</div>' +
-          '<div style="font-size:12px;color:#444;margin-top:2px;">Period: ' + escapeHtml(sheet.period_start) + ' — ' + escapeHtml(sheet.period_end) + '</div>' +
-          '<hr style="border:none;border-top:2px solid #1a1a2e;margin-top:10px;">' +
-        '</div>';
-      wrapper.appendChild(clone);
-      wrapper.insertAdjacentHTML('beforeend',
-        '<div style="display:flex;justify-content:space-between;margin-top:60px;">' +
-          '<div style="width:30%;text-align:center;font-size:12px;"><div style="border-top:1px solid #1a1a2e;margin-bottom:6px;">&nbsp;</div>Prepared by</div>' +
-          '<div style="width:30%;text-align:center;font-size:12px;"><div style="border-top:1px solid #1a1a2e;margin-bottom:6px;">&nbsp;</div>Checked by</div>' +
-          '<div style="width:30%;text-align:center;font-size:12px;"><div style="border-top:1px solid #1a1a2e;margin-bottom:6px;">&nbsp;</div>Approved by</div>' +
-        '</div>'
-      );
-      return wrapper;
-    }
-
-    // "Print" previews a formatted PDF in a new tab (no browser print
-    // dialog, no immediate force-download) — html2canvas + jsPDF (loaded
-    // via CDN, see <head>) render the same letterhead/table/signature
-    // layout used for the on-screen preview. The browser's own native PDF
-    // viewer provides its own download/print controls from there.
-    function printPeriodSheet() {
-      var content = document.getElementById('printable-sheet');
-      var sheet = window._lastPeriodSheet;
-      if (!content || !sheet) { alert('Generate a period sheet first.'); return; }
-      var wrapper = buildPrintableWrapper(sheet, content);
-      document.body.appendChild(wrapper);
-      var btn = document.getElementById('btn-print');
-      btn.disabled = true;
-      btn.innerHTML = '<span class="pl-spinner"></span>Generating PDF…';
-      var doc = new jspdf.jsPDF('p', 'pt', 'a4');
-      doc.html(wrapper, {
-        x: 20,
-        y: 20,
-        width: 555,       // A4 width (595pt) minus left/right margins
-        windowWidth: 780, // matches wrapper's off-screen render width
-        callback: function(pdf) {
-          document.body.removeChild(wrapper);
-          window.open(pdf.output('bloburl'), '_blank');
-          btn.disabled = false;
-          btn.textContent = '🖨 Print (PDF)';
-        }
-      });
-    }
-
-    // "Export" downloads an Excel (.xlsx) workbook of the timesheet rows —
-    // SheetJS (loaded via CDN, see <head>) replaces the previous raw-CSV
-    // export.
-    function exportPeriodCSV(sheet) {
-      if (!sheet) { alert('Generate a period sheet first.'); return; }
-      var headers = ['Date','Branch','IN','OUT','Hours',
-                     'Auto Fare','Special Fare','Total Fare','Meal','Accom','Midnight','Total'];
-      var rows = sheet.rows.map(function(r) {
-        return [r.date, r.branch, r.time_in, r.time_out, r.hours_worked,
-                r.auto_fare, r.special_fare, r.total_fare,
-                r.meal, r.accom, r.midnight, r.total_allowance];
-      });
-      var ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
-      var wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Timesheet');
-      XLSX.writeFile(wb, sheet.employee.name + '_' + sheet.period_start + '.xlsx');
-    }
+    // printPeriodSheet() and exportPeriodExcel() moved to shared app.js
+    // (both admin.html and index.html need them now). The admin Print/Export
+    // buttons call the shared versions with `this` for the spinner state.
   </script>
 </body>
 </html>

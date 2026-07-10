@@ -74,7 +74,11 @@
 
     <!-- Tab 1: Timesheet -->
     <div id="tab-sheet">
-      <button id="save-shift-btn" onclick="saveShiftChanges()" style="padding:8px 18px;display:none;margin-bottom:10px;">💾 Save Shift Changes</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <button id="save-shift-btn" onclick="saveShiftChanges()" style="padding:8px 18px;display:none;">💾 Save Shift Changes</button>
+        <button onclick="printPeriodSheet(this)" style="padding:8px 18px;">🖨 Print (PDF)</button>
+        <button onclick="exportPeriodExcel(this)" style="padding:8px 18px;">⬇ Export Excel</button>
+      </div>
       <div id="emp-period-sheet"><p style="color:#888;">Select a date range above and click Load.</p></div>
 
       <!-- Inline claim form — revealed when employee clicks + Fare / + Accom -->
@@ -128,6 +132,12 @@
     </div>
   </div>
 
+  <!-- PDF (Print) + Excel (Export) libraries — shared print/export code
+       lives in app.js and depends on these CDN globals. Client-side only,
+       no build step. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="app.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
